@@ -13,7 +13,9 @@
     "lint": "eslint app/ components/ hooks/ store/ services/ --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
     "android": "expo run:android",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "clear:android": "cd android && rm -rf .cxx app/.cxx app/build build .gradle && ./gradlew clean",
+    "clear:ios": "cd ios && rm -rf build && xcodebuild -workspace StickyNotes.xcworkspace -scheme StickyNotes clean"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

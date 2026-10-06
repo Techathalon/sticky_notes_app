@@ -140,8 +140,11 @@ export default function TaskEditorScreen() {
       // Compute alarmAt for backend alarm push (exact due time)
       let alarmAt: string | null = null;
       if (alarmEnabled && dueTime) {
-        const alarmDate = new Date(dueDate);
+        let alarmDate = new Date(dueDate);
         alarmDate.setHours(dueTime.h, dueTime.m, 0, 0);
+        if (alarmDate <= new Date() && alarmDate.getTime() > Date.now() - 60_000) {
+          alarmDate = new Date(Date.now() + 5_000);
+        }
         if (alarmDate > new Date()) alarmAt = alarmDate.toISOString();
       }
 
@@ -417,8 +420,8 @@ export default function TaskEditorScreen() {
         )}
 
 
-        {/* ── Alarm toggle (Android only — iOS does not support local alarms) ── */}
-        {Platform.OS === 'android' && dueTime && alarmsEnabled && (
+        {/* ── Alarm toggle ── */}
+        {dueTime && alarmsEnabled && (
           <View style={[s.fieldRow, { backgroundColor: c.surface, borderColor: c.border }]}>
             <View style={s.fieldLeft}>
               <View style={[s.fieldIcon, { backgroundColor: '#FFF1F2' }]}>

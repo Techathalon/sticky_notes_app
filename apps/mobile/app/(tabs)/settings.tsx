@@ -168,27 +168,25 @@ export default function SettingsScreen() {
               c={c}
             />
           </View>
-          {Platform.OS === 'android' && (
-            <View style={!notificationsEnabled ? { opacity: 0.5 } : undefined}>
-              <SettingRow
-                icon="alarm-outline"
-                iconBg="#FFF1F2"
-                iconColor="#E11D48"
-                label="Alarms"
-                sublabel={notificationsEnabled ? 'Set reminders for tasks & events' : 'Notifications required'}
-                c={c}
-                right={
-                  <Switch
-                    value={alarmsEnabled}
-                    onValueChange={handleToggleAlarms}
-                    disabled={!notificationsEnabled}
-                    trackColor={{ false: c.border, true: '#E11D48' }}
-                    thumbColor="#fff"
-                  />
-                }
-              />
-            </View>
-          )}
+          <View style={!notificationsEnabled ? { opacity: 0.5 } : undefined}>
+            <SettingRow
+              icon="alarm-outline"
+              iconBg="#FFF1F2"
+              iconColor="#E11D48"
+              label="Alarms"
+              sublabel={notificationsEnabled ? 'Set reminders for tasks & events' : 'Notifications required'}
+              c={c}
+              right={
+                <Switch
+                  value={alarmsEnabled}
+                  onValueChange={handleToggleAlarms}
+                  disabled={!notificationsEnabled}
+                  trackColor={{ false: c.border, true: '#E11D48' }}
+                  thumbColor="#fff"
+                />
+              }
+            />
+          </View>
         </View>
 
         {/* SYNC */}

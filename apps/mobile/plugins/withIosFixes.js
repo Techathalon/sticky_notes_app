@@ -10,29 +10,158 @@
  *  2. FirebaseApp.configure()
  */
 
-const { withAppDelegate } = require('expo/config-plugins');
+const fs = require('fs');
+const path = require('path');
+const { withAppDelegate, withDangerousMod, withInfoPlist } = require('expo/config-plugins');
 
-function addFirebaseToAppDelegate(contents) {
-  if (contents.includes('FirebaseApp.configure()')) return contents; // already present
+function addFirebaseAndSceneDelegateToAppDelegate(contents) {
+  if (contents.includes('SceneDelegate')) return contents; // already migrated
 
-  // Add  import Firebase  after  import Expo
+  // 1. Ensure Firebase import
+  if (!contents.includes('import Firebase')) {
+    contents = contents.replace(
+      'import Expo',
+      'import Expo\nimport Firebase'
+    );
+  }
+
+  // 2. Remove window creation in didFinishLaunchingWithOptions and ensure Firebase configure
+  const oldStart = /#if os\(iOS\) \|\| os\(tvOS\)[\s\S]*?factory\.startReactNative[\s\S]*?#endif/;
+  if (oldStart.test(contents)) {
+    contents = contents.replace(oldStart, 'FirebaseApp.configure()');
+  } else if (!contents.includes('FirebaseApp.configure()')) {
+    contents = contents.replace(
+      'return super.application(application, didFinishLaunchingWithOptions: launchOptions)',
+      'FirebaseApp.configure()\n    return super.application(application, didFinishLaunchingWithOptions: launchOptions)'
+    );
+  }
+
+  // 3. Add UIScene lifecycle methods and SceneDelegate class
+  const sceneMethods = `
+  // MARK: UISceneSession Lifecycle
+  public func application(
+    _ application: UIApplication,
+    configurationForConnecting connectingSceneSession: UISceneSession,
+    options: UIScene.ConnectionOptions
+  ) -> UISceneConfiguration {
+    let sceneConfig = UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+    sceneConfig.delegateClass = SceneDelegate.self
+    return sceneConfig
+  }
+
+  public func application(
+    _ application: UIApplication,
+    didDiscardSceneSessions sceneSessions: Set<UISceneSession>
+  ) {
+  }
+`;
+
   contents = contents.replace(
-    'import Expo',
-    'import Expo\nimport Firebase'
+    '  // Linking API',
+    `${sceneMethods}\n  // Linking API`
   );
 
-  // Add  FirebaseApp.configure()  as first line inside didFinishLaunchingWithOptions
+  const sceneDelegateClass = `
+@objc(SceneDelegate)
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+  var window: UIWindow?
+
+  func scene(
+    _ scene: UIScene,
+    willConnectTo session: UISceneSession,
+    options connectionOptions: UIScene.ConnectionOptions
+  ) {
+    guard let windowScene = (scene as? UIWindowScene) else { return }
+
+    let window = UIWindow(windowScene: windowScene)
+    self.window = window
+
+    guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else { return }
+    appDelegate.window = window
+
+    if let factory = appDelegate.reactNativeFactory {
+      factory.startReactNative(
+        withModuleName: "main",
+        in: window,
+        launchOptions: nil
+      )
+    }
+  }
+
+  func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+    for context in URLContexts {
+      _ = (UIApplication.shared.delegate as? AppDelegate)?.application(
+        UIApplication.shared,
+        open: context.url,
+        options: [:]
+      )
+    }
+  }
+
+  func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+    _ = (UIApplication.shared.delegate as? AppDelegate)?.application(
+      UIApplication.shared,
+      continue: userActivity,
+      restorationHandler: { _ in }
+    )
+  }
+}
+`;
+
   contents = contents.replace(
-    'let delegate = ReactNativeDelegate()',
-    'FirebaseApp.configure()\n    let delegate = ReactNativeDelegate()'
+    'class ReactNativeDelegate: ExpoReactNativeFactoryDelegate',
+    `${sceneDelegateClass}\nclass ReactNativeDelegate: ExpoReactNativeFactoryDelegate`
   );
 
   return contents;
 }
 
+function addSceneManifestToInfoPlist(config) {
+  return withInfoPlist(config, (cfg) => {
+    cfg.modResults.UIApplicationSceneManifest = {
+      UIApplicationSupportsMultipleScenes: false,
+      UISceneConfigurations: {
+        UIWindowSceneSessionRoleApplication: [
+          {
+            UISceneConfigurationName: 'Default Configuration',
+            UISceneDelegateClassName: '$(PRODUCT_MODULE_NAME).SceneDelegate',
+          },
+        ],
+      },
+    };
+    return cfg;
+  });
+}
+
+function addModularHeadersToPodfile(config) {
+  return withDangerousMod(config, [
+    'ios',
+    async (cfg) => {
+      const podfilePath = path.join(cfg.modRequest.platformProjectRoot, 'Podfile');
+      if (fs.existsSync(podfilePath)) {
+        let contents = fs.readFileSync(podfilePath, 'utf-8');
+        if (!contents.includes('use_modular_headers!')) {
+          contents = contents.replace(
+            'use_expo_modules!',
+            'use_expo_modules!\n  use_modular_headers!'
+          );
+        }
+        if (!contents.includes("config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'")) {
+          const postInstallTargetCode = `    installer.pods_project.targets.each do |target|\\n      target.build_configurations.each do |config|\\n        if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 15.1\\n          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'\\n        end\\n      end\\n    end\\n  end`;
+          contents = contents.replace(/\n  end\s*\nend/s, `\n${postInstallTargetCode}\nend`);
+        }
+        fs.writeFileSync(podfilePath, contents, 'utf-8');
+      }
+      return cfg;
+    },
+  ]);
+}
+
 module.exports = function withIosFixes(config) {
-  return withAppDelegate(config, (c) => {
-    c.modResults.contents = addFirebaseToAppDelegate(c.modResults.contents);
+  config = withAppDelegate(config, (c) => {
+    c.modResults.contents = addFirebaseAndSceneDelegateToAppDelegate(c.modResults.contents);
     return c;
   });
+  config = addSceneManifestToInfoPlist(config);
+  return addModularHeadersToPodfile(config);
 };

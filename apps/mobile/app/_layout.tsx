@@ -21,14 +21,17 @@ import { pushApi } from '../services/api';
 
 SplashScreen.preventAutoHideAsync();
 
-// Suppress FCM type='alarm' banners in foreground — notifee local alarm already shows the UI.
+// Suppress FCM type='alarm' banners in foreground on Android — notifee local alarm already shows the UI.
 // Also suppress all alarm-related notifications when the user has disabled alarms in settings.
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data as { type?: string } | undefined;
     const alarmsEnabled = useNotificationsStore.getState().alarmsEnabled;
     const isAlarmNotification = data?.type === 'alarm' || data?.type === 'schedule_alarm';
-    if (isAlarmNotification && (!alarmsEnabled || data?.type === 'alarm')) {
+    if (isAlarmNotification && !alarmsEnabled) {
+      return { shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false };
+    }
+    if (Platform.OS === 'android' && data?.type === 'alarm') {
       return { shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false };
     }
     return { shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false };
