@@ -1,5 +1,7 @@
 import { Platform, NativeModules } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import { requestNotificationPermission } from './notifications';
 import notifee, {
   AndroidCategory,
   AndroidImportance,
@@ -81,6 +83,39 @@ export async function scheduleLocalAlarm(
   alarmAt: Date,
   type: 'task' | 'event' = 'task'
 ): Promise<void> {
+  if (Platform.OS === 'ios') {
+    try {
+      const dismissedId = await AsyncStorage.getItem('lastDismissedAlarmId').catch(() => null);
+      if (dismissedId === id) {
+        await AsyncStorage.removeItem('lastDismissedAlarmId').catch(() => {});
+      }
+      await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+      await Notifications.scheduleNotificationAsync({
+        identifier: id,
+        content: {
+          title: type === 'event' ? '📅 Event Alarm' : '⏰ Task Alarm',
+          body: title,
+          sound: 'alarm.wav',
+          data: {
+            alarmTitle: title,
+            alarmType: type,
+            alarmId: id,
+            alarmAt: alarmAt.getTime().toString(),
+            type: 'alarm',
+          },
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: alarmAt,
+        },
+      });
+      console.log(`[AlarmManager] Scheduled local alarm on iOS: "${title}" at ${alarmAt.toLocaleTimeString()}`);
+    } catch (err) {
+      console.error('[AlarmManager] iOS scheduleLocalAlarm failed:', err);
+    }
+    return;
+  }
+
   if (Platform.OS !== 'android') return;
   try {
     await ensureAlarmChannel();
@@ -130,6 +165,15 @@ export async function scheduleLocalAlarm(
  * Call when task/event alarm is toggled off, edited, or deleted.
  */
 export async function cancelLocalAlarm(id: string): Promise<void> {
+  if (Platform.OS === 'ios') {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(id);
+    } catch {
+      // Alarm may not exist — ignore
+    }
+    return;
+  }
+
   if (Platform.OS !== 'android') return;
 
   try {
@@ -147,6 +191,15 @@ export async function cancelLocalAlarm(id: string): Promise<void> {
  * Call when the user disables alarms globally in settings.
  */
 export async function cancelAllLocalAlarms(): Promise<void> {
+  if (Platform.OS === 'ios') {
+    try {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+    } catch (err) {
+      console.error('[AlarmManager] cancelAllLocalAlarms failed on iOS:', err);
+    }
+    return;
+  }
+
   if (Platform.OS !== 'android') return;
   try {
     await notifee.cancelAllNotifications();
@@ -256,6 +309,10 @@ export async function checkAndPromptOverlayPermission(): Promise<void> {
  * Call whenever user enables an alarm (task-editor / event-editor) AND on every app open.
  */
 export async function checkAllAlarmPermissions(): Promise<void> {
+  if (Platform.OS === 'ios') {
+    await requestNotificationPermission();
+    return;
+  }
   if (Platform.OS !== 'android') return;
   // Only ask once — first time user sets an alarm (task, event, or settings toggle).
   // Flag is written BEFORE showing modals so "Later" also permanently counts as asked.

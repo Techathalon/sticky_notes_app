@@ -118,8 +118,11 @@ const [showEndTime,   setShowEndTime]   = useState(false);
       }
 
       // Compute alarmAt — zero seconds/ms so alarm fires at exactly HH:mm:00
-      const alarmDate = new Date(startDate);
+      let alarmDate = new Date(startDate);
       alarmDate.setSeconds(0, 0);
+      if (alarmDate <= new Date() && alarmDate.getTime() > Date.now() - 60_000) {
+        alarmDate = new Date(Date.now() + 5_000);
+      }
       const alarmAt: string | null = (alarmEnabled && alarmDate > new Date())
         ? alarmDate.toISOString()
         : null;
@@ -495,8 +498,8 @@ const [showEndTime,   setShowEndTime]   = useState(false);
             }} />
         )}
 
-        {/* ── Alarm toggle (Android only — iOS does not support local alarms) ── */}
-        {Platform.OS === 'android' && alarmsEnabled && (
+        {/* ── Alarm toggle ── */}
+        {alarmsEnabled && (
           <View style={[s.fieldRow, { backgroundColor: c.surface, borderColor: c.border }]}>
             <View style={s.fieldLeft}>
               <View style={[s.fieldIcon, { backgroundColor: '#FFF1F2' }]}>
