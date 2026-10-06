@@ -29,7 +29,7 @@ export async function authenticateWithBiometrics(reason: string): Promise<Biomet
 
     if (result.success) return { success: true };
 
-    if (result.error === 'lockout' || result.error === 'lockout_permanent') {
+    if (result.error === 'lockout' || (result.error as string) === 'lockout_permanent') {
       return { success: false, error: 'lockout', message: 'Too many failed attempts. Try again later.' };
     }
     if (result.error === 'user_cancel' || result.error === 'system_cancel') {
