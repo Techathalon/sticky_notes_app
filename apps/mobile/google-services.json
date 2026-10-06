@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "640513640473",
+    "project_id": "sticky-notes-de0ef",
+    "storage_bucket": "sticky-notes-de0ef.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:640513640473:android:541dae6ed2874e27c80288",
+        "android_client_info": {
+          "package_name": "com.stickynotes.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBHoy1-jI0pYCvkhO4YmE5TAJndcloVGDc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
