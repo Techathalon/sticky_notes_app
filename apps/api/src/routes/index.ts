@@ -5,6 +5,7 @@ import { todosRouter } from './todos.routes';
 import { eventsRouter } from './events.routes';
 import { expensesRouter } from './expenses.routes';
 import { pushRouter } from './push.routes';
+import { appSettingsRouter } from './app-settings.routes';
 
 export const router: Router = Router();
 
@@ -14,3 +15,4 @@ router.use('/todos', todosRouter);
 router.use('/events', eventsRouter);
 router.use('/expenses', expensesRouter);
 router.use('/push', pushRouter);
+router.use('/app-settings', appSettingsRouter);

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Platform, KeyboardAvoidingView,
+  ScrollView, Platform, KeyboardAvoidingView, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { IOSPickerModal } from '../components/IOSPickerModal';
 import { useAppAlert } from '../components/AppAlert';
 import { useExpenseStore, type ExpenseCategory } from '../store/expenseStore';
 import { useThemeColors } from '../store/themeStore';
@@ -34,6 +35,7 @@ function dateToStr(d: Date): string {
 // ─── Screen ───────────────────────────────────────────────────
 
 export default function ExpenseEditorScreen() {
+  const insets = useSafeAreaInsets();
   const c = useThemeColors();
   const { showAlert, AlertModal } = useAppAlert();
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -60,6 +62,7 @@ export default function ExpenseEditorScreen() {
     return new Date();
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const effectiveCategory = category === 'Other' && customCategory.trim()
     ? customCategory.trim()
@@ -73,6 +76,7 @@ export default function ExpenseEditorScreen() {
   );
 
   const handleSave = async () => {
+    if (saving) return;
     if (!title.trim()) {
       showAlert({ type: 'error', title: 'Title Required', message: 'Please enter a title for this expense.' });
       return;
@@ -86,6 +90,7 @@ export default function ExpenseEditorScreen() {
       showAlert({ type: 'error', title: 'Category Required', message: 'Please enter a custom category name.' });
       return;
     }
+    setSaving(true);
     try {
       if (existing) {
         await updateExpense(existing.id, { title: title.trim(), amount: amt, category: effectiveCategory, date: dateToStr(date) });
@@ -95,11 +100,13 @@ export default function ExpenseEditorScreen() {
       router.back();
     } catch {
       showAlert({ type: 'error', title: 'Save Failed', message: 'Could not save the expense. Please try again.' });
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <SafeAreaView style={[s.root, { backgroundColor: c.bg }]} edges={['top']}>
+    <View style={[s.root, { backgroundColor: c.bg, paddingTop: insets.top }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {/* Header */}
         <View style={[s.header, { borderBottomColor: c.hairline }]}>
@@ -109,10 +116,13 @@ export default function ExpenseEditorScreen() {
           <Text style={[s.headerTitle, { color: c.text }]}>{isNew ? 'New Expense' : 'Edit Expense'}</Text>
           <TouchableOpacity
             onPress={handleSave}
-            disabled={!isDirty}
-            style={[s.saveBtn, { backgroundColor: COLORS.primary }, !isDirty && { opacity: 0.4 }]}
+            disabled={!isDirty || saving}
+            style={[s.saveBtn, { backgroundColor: COLORS.primary }, (!isDirty || saving) && { opacity: 0.4 }]}
           >
-            <Text style={s.saveBtnText}>{isNew ? 'Save' : 'Update'}</Text>
+            {saving
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={s.saveBtnText}>{isNew ? 'Save' : 'Update'}</Text>
+            }
           </TouchableOpacity>
         </View>
 
@@ -189,7 +199,16 @@ export default function ExpenseEditorScreen() {
               {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
             </Text>
           </TouchableOpacity>
-          {showDatePicker && (
+          {Platform.OS === 'ios' ? (
+            <IOSPickerModal
+              visible={showDatePicker}
+              value={date}
+              mode="date"
+              maximumDate={new Date()}
+              onCancel={() => setShowDatePicker(false)}
+              onDone={(d) => { setShowDatePicker(false); setDate(d); }}
+            />
+          ) : showDatePicker && (
             <DateTimePicker
               value={date}
               mode="date"
@@ -201,7 +220,7 @@ export default function ExpenseEditorScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
       {AlertModal}
-    </SafeAreaView>
+    </View>
   );
 }
 

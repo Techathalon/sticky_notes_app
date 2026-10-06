@@ -4,7 +4,8 @@ import {
   ScrollView, Switch, Platform,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { IOSPickerModal } from '../components/IOSPickerModal';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useNotificationsStore } from '../store/notificationsStore';
@@ -97,6 +98,7 @@ function OffsetInput({
 // ─── Screen ───────────────────────────────────────────────────
 
 export default function NotificationSettingsScreen() {
+  const insets = useSafeAreaInsets();
   const c = useThemeColors();
   const router = useRouter();
   const { todos, updateTodo } = useTodosStore();
@@ -169,7 +171,7 @@ export default function NotificationSettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={[s.root, { backgroundColor: c.bg }]} edges={['top']}>
+    <View style={[s.root, { backgroundColor: c.bg, paddingTop: insets.top }]}>
       {/* ── Header ── */}
       <View style={[s.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
         <TouchableOpacity onPress={handleBack} style={s.headerBtn}>
@@ -340,11 +342,25 @@ export default function NotificationSettingsScreen() {
           </View>
         </View>
 
-        {showTimePicker && (
+        {Platform.OS === 'ios' ? (
+          <IOSPickerModal
+            visible={showTimePicker}
+            value={summaryDate}
+            mode="time"
+            onCancel={() => setShowTimePicker(false)}
+            onDone={(d) => {
+              setShowTimePicker(false);
+              saveExpenseSettings({
+                expenseSummaryHour: d.getHours(),
+                expenseSummaryMinute: d.getMinutes(),
+              });
+            }}
+          />
+        ) : showTimePicker && (
           <DateTimePicker
             value={summaryDate}
             mode="time"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            display="default"
             onChange={(_, d) => {
               setShowTimePicker(false);
               if (d) {
@@ -359,7 +375,7 @@ export default function NotificationSettingsScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

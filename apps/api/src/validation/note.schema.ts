@@ -7,6 +7,7 @@ export const createNoteSchema = z.object({
   content: z.string().max(50000).optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid hex color').optional(),
   category: z.string().max(50).optional(),
+  isLocked: z.boolean().optional(),
 });
 
 export const updateNoteSchema = z.object({
@@ -14,6 +15,7 @@ export const updateNoteSchema = z.object({
   content: z.string().max(50000).optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid hex color').optional(),
   category: z.string().max(50).optional(),
+  isLocked: z.boolean().optional(),
 });
 
 export const noteIdSchema = z.object({

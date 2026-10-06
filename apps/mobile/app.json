@@ -13,7 +13,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.stickynotes.app"
+      "bundleIdentifier": "com.stickynotes.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "UIBackgroundModes": ["remote-notification"],
+        "NSFaceIDUsageDescription": "Use Face ID to unlock your locked notes securely."
+      }
     },
     "android": {
       "googleServicesFile": "./google-services.json",
@@ -28,7 +33,9 @@
         "android.permission.USE_EXACT_ALARM",
         "android.permission.USE_FULL_SCREEN_INTENT",
         "android.permission.WAKE_LOCK",
-        "android.permission.RECEIVE_BOOT_COMPLETED"
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
       ]
     },
     "web": {
@@ -37,6 +44,9 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withAndroidFixes",
+      "./plugins/withIosFixes",
+      "@react-native-firebase/app",
       "expo-router",
       "expo-secure-store",
       [
@@ -61,13 +71,14 @@
         }
       ],
       "expo-audio",
-      "react-native-permissions"
+      "react-native-permissions",
+      "expo-local-authentication"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "apiUrl": "http://192.168.0.109:3000"
+      "apiUrl": "http://192.168.0.122:3000"
     }
   }
 }

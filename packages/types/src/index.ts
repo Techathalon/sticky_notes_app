@@ -59,6 +59,7 @@ export interface Note {
   content: string | null;
   color: string;
   category: string | null;
+  isLocked: boolean;
   userId: string;
   createdAt: string;
   updatedAt: string;
@@ -69,6 +70,7 @@ export interface CreateNoteRequest {
   content?: string;
   color?: string;
   category?: string;
+  isLocked?: boolean;
 }
 
 export interface UpdateNoteRequest {
@@ -76,6 +78,7 @@ export interface UpdateNoteRequest {
   content?: string;
   color?: string;
   category?: string;
+  isLocked?: boolean;
 }
 
 // ── Todos ────────────────────────────────
@@ -91,6 +94,7 @@ export interface Todo {
   priority: TodoPriority;
   dueDate: string | null;
   dueTime: string | null;
+  startAt: string | null;
   reminderAt: string | null;
   alarmAt: string | null;
   userId: string;
@@ -105,6 +109,7 @@ export interface CreateTodoRequest {
   priority?: TodoPriority;
   dueDate?: string;
   dueTime?: string;
+  startAt?: string | null;
   reminderAt?: string | null;
   alarmAt?: string | null;
 }
@@ -117,6 +122,7 @@ export interface UpdateTodoRequest {
   priority?: TodoPriority;
   dueDate?: string | null;
   dueTime?: string | null;
+  startAt?: string | null;
   reminderAt?: string | null;
   alarmAt?: string | null;
 }
@@ -192,6 +198,19 @@ export interface UpdateExpenseRequest {
   amount?: number;
   category?: string;
   date?: string;
+}
+
+// ── App Settings (synced across devices) ──
+export interface AppSettings {
+  alarmsEnabled:         boolean;
+  taskReminderEnabled:   boolean;
+  taskReminderTime:      string;  // "HH:MM" offset before due
+  eventReminderEnabled:  boolean;
+  eventReminderTime:     string;  // "HH:MM" offset before start
+  expenseSummaryEnabled: boolean;
+  expenseSummaryTime:    string;  // "HH:MM" UTC clock time
+  budget80AlertEnabled:  boolean;
+  budget100AlertEnabled: boolean;
 }
 
 // ── API response wrappers ─────────────────

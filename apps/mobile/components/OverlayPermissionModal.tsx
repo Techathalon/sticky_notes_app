@@ -1,4 +1,4 @@
-import { Modal, View, Text, TouchableOpacity, StyleSheet,  Linking ,Platform} from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, Linking, NativeModules } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,34 +10,15 @@ type Props = {
 export function OverlayPermissionModal({ visible, onDismiss }: Props) {
   const insets = useSafeAreaInsets();
 
-  function openSettings() {
+  async function openSettings() {
     onDismiss();
     try {
-      
-        console.warn('[OverlayModal] NativeModules.OverlayPermission is undefined — falling back to app settings');
-        Linking.openSettings().catch(() => {});
-        return;
-    }
-    catch (err) {
-      console.warn('[OverlayModal] openOverlaySettings threw:', err);
+      await NativeModules.OverlayPermission.openOverlaySettings();
+    } catch (err) {
+      console.warn('[OverlayModal] openOverlaySettings failed, falling back:', err);
       Linking.openSettings().catch(() => {});
     }
   }
-//   const openSettings = async () => {
-//   if (Platform.OS !== 'android') return;
-
-//   const packageName = "com.yourapp.packagename"; // 🔥 change this
-
-//   try {
-//     // Try direct overlay screen
-//     await Linking.openURL(
-//       `android.settings.MANAGE_OVERLAY_PERMISSION?package=${packageName}`
-//     );
-//   } catch (err) {
-//     console.warn('Direct overlay open failed, fallback');
-//     Linking.openSettings();
-//   }
-// };
 
   return (
     <Modal visible={visible} transparent animationType="slide" statusBarTranslucent>
@@ -69,13 +50,20 @@ export function OverlayPermissionModal({ visible, onDismiss }: Props) {
             This allows alarms to appear on your screen even when the app is closed or the screen is locked.
           </Text>
 
+          {/* Steps */}
+          <Text style={s.steps}>
+            After tapping Allow:{'\n'}
+            {'1.'} Find <Text style={s.bold}>Sticky Notes</Text> in the list{'\n'}
+            {'2.'} Enable <Text style={s.bold}>Allow display over other apps</Text>
+          </Text>
+
           {/* Divider */}
           <View style={s.divider} />
 
           {/* Buttons */}
           <View style={s.btnRow}>
             <TouchableOpacity style={s.denyBtn} onPress={onDismiss} activeOpacity={0.7}>
-              <Text style={s.denyText}>Don't allow</Text>
+              <Text style={s.denyText}>Don&apos;t allow</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.allowBtn} onPress={openSettings} activeOpacity={0.85}>
               <Text style={s.allowText}>Allow</Text>
@@ -150,7 +138,23 @@ const s = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     lineHeight: 21,
-    marginBottom: 24,
+    marginBottom: 14,
+  },
+  steps: {
+    fontSize: 13,
+    color: '#BBB',
+    lineHeight: 22,
+    alignSelf: 'flex-start',
+    marginBottom: 20,
+    backgroundColor: '#252525',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    width: '100%',
+  },
+  bold: {
+    fontWeight: '700',
+    color: '#E2E8F0',
   },
   divider: {
     width: '100%',

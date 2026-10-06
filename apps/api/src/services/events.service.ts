@@ -80,6 +80,9 @@ export class EventsService {
       startDate: input.startDate ? new Date(input.startDate) : undefined,
       endDate: input.endDate ? new Date(input.endDate) : undefined,
     };
+    if (input.startDate !== undefined) {
+      data.startNotifSentAt = null;
+    }
     if (input.reminderAt !== undefined) {
       data.reminderAt = input.reminderAt ? new Date(input.reminderAt) : null;
       data.reminderSentAt = null;

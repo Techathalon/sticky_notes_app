@@ -21,6 +21,7 @@ import type {
   UpdateEventRequest,
   Expense,
   CreateExpenseRequest,
+  AppSettings,
   ApiResponse,
 } from '@repo/types';
 
@@ -28,7 +29,7 @@ import type {
 const API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
-  'http://192.168.0.110:3000';
+  'http://192.168.0.122:3000';
 
 export const ACCESS_TOKEN_KEY = 'access_token';
 export const TOKEN_ID_KEY = 'token_id';
@@ -96,7 +97,7 @@ export const notesApi = {
   deleteImage: (url: string) =>
     api.delete('/notes/image', { data: { url } }),
   detectExpenses: (text: string) =>
-    api.post<ApiResponse<{ amount: number; title: string; category: string; snippet: string }[]>>('/notes/detect-expenses', { text }).then((r) => r.data.data),
+    api.post<ApiResponse<{ amount: number; title: string; category: string; snippet: string , date: string}[]>>('/notes/detect-expenses', { text }).then((r) => r.data.data),
 };
 
 // ─── Todos API ───────────────────────────────────────────────
@@ -152,6 +153,14 @@ export const expenseSettingsApi = {
     api.get<ApiResponse<ExpenseSettings>>('/expenses/settings').then((r) => r.data.data),
   update: (data: Partial<ExpenseSettings>) =>
     api.put<ApiResponse<ExpenseSettings>>('/expenses/settings', data).then((r) => r.data.data),
+};
+
+// ─── App Settings API (cross-device sync) ────────────────────
+export const appSettingsApi = {
+  get: () =>
+    api.get<ApiResponse<AppSettings>>('/app-settings').then((r) => r.data.data),
+  save: (data: AppSettings) =>
+    api.put<ApiResponse<AppSettings>>('/app-settings', data).then((r) => r.data.data),
 };
 
 // ─── Push Notifications API ──────────────────────────────────

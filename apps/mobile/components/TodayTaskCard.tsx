@@ -11,7 +11,6 @@ interface Props {
   todo: number;
   total: number;
   date: string;               // 'YYYY-MM-DD'
-  isToday?: boolean;
   onPrevDay?: () => void;
   onNextDay?: () => void;
   onDateChange?: (dateStr: string) => void;
@@ -37,7 +36,7 @@ function StatusRow({ color, label, count }: StatusRowProps) {
 
 export function TodayTaskCard({
   completed, inProgress, todo, total,
-  date, isToday = false,
+  date,
   onPrevDay, onNextDay, onDateChange,
 }: Props) {
   const [showPicker, setShowPicker] = useState(false);
@@ -73,9 +72,8 @@ export function TodayTaskCard({
 
           <TouchableOpacity
             onPress={onNextDay}
-            style={[styles.chevron, isToday && styles.chevronDisabled]}
+            style={styles.chevron}
             activeOpacity={0.6}
-            disabled={isToday}
           >
             <Ionicons name="chevron-forward-outline" size={18} color="#94A3B8" />
           </TouchableOpacity>
@@ -104,7 +102,6 @@ export function TodayTaskCard({
         <DateTimePicker
           value={pickerDate}
           mode="date"
-          maximumDate={new Date()}
           onChange={(_, selected) => {
             setShowPicker(false);
             if (selected) onDateChange?.(toLocalDateStrFromDate(selected));
@@ -126,7 +123,6 @@ export function TodayTaskCard({
                 value={pickerDate}
                 mode="date"
                 display="spinner"
-                maximumDate={new Date()}
                 onChange={(_, selected) => { if (selected) setPickerDate(selected); }}
               />
             </View>

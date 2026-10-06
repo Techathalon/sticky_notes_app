@@ -82,7 +82,7 @@ export default function ForgotPasswordScreen() {
               <View style={[styles.successBox, { backgroundColor: isDark ? '#14301A' : '#F0FDF4' }]}>
                 <Ionicons name="checkmark-circle-outline" size={18} color="#16A34A" />
                 <Text style={styles.successText}>
-                  Check your email! We've sent a password reset link to {email.trim().toLowerCase()}.
+                  Check your email! We&apos;ve sent a password reset link to {email.trim().toLowerCase()}.
                 </Text>
               </View>
               <View style={styles.footer}>
@@ -103,7 +103,7 @@ export default function ForgotPasswordScreen() {
               ) : null}
 
               <Text style={[styles.hint, { color: c.textSub }]}>
-                We'll send a password reset link to your email address.
+                We&apos;ll send a password reset link to your email address.
               </Text>
 
               {/* Email — read-only display from settings, input otherwise */}

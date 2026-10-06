@@ -15,6 +15,7 @@ export class NotesService {
       content: n.content,
       color: n.color,
       category: n.category,
+      isLocked: n.isLocked,
       userId: n.userId,
       createdAt: n.createdAt.toISOString(),
       updatedAt: n.updatedAt.toISOString(),
@@ -31,7 +32,8 @@ export class NotesService {
       content: note.content,
       color: note.color,
       category: note.category,
-            userId: note.userId,
+      isLocked: note.isLocked,
+      userId: note.userId,
       createdAt: note.createdAt.toISOString(),
       updatedAt: note.updatedAt.toISOString(),
     };
@@ -47,7 +49,8 @@ export class NotesService {
       content: note.content,
       color: note.color,
       category: note.category,
-            userId: note.userId,
+      isLocked: note.isLocked,
+      userId: note.userId,
       createdAt: note.createdAt.toISOString(),
       updatedAt: note.updatedAt.toISOString(),
     };

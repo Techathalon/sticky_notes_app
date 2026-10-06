@@ -112,7 +112,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: 'transparent' },
+  root: { flex: 1, backgroundColor: 'transparent' , marginBottom:4},
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
     backgroundColor: 'transparent',

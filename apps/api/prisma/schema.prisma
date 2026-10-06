@@ -26,7 +26,7 @@ model User {
   resetTokens   PasswordResetToken[]
   refreshTokens RefreshToken[]
   deviceTokens     DeviceToken[]
-  expenseSettings  UserExpenseSettings?
+  appSettings      UserAppSettings?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
 
@@ -50,7 +50,6 @@ model RefreshToken {
   id        String   @id @default(cuid())
   userId    String
   token     String   @unique
-  expiresAt DateTime
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -76,6 +75,7 @@ model Note {
   content   String?
   color     String   @default("#FFFF88")
   category  String?  @default("General")
+  isLocked  Boolean  @default(false)
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
@@ -86,26 +86,28 @@ model Note {
 }
 
 model Event {
-  id             String   @id @default(cuid())
-  title          String
-  description    String?
-  startDate      DateTime
-  endDate        DateTime
-  color          String   @default("#99CCFF")
-  category       String?  @default("General")
-  location       String?
-  reminderAt     DateTime?
-  reminderSentAt DateTime?
-  alarmAt        DateTime?
-  alarmSentAt    DateTime?
-  userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id               String    @id @default(cuid())
+  title            String
+  description      String?
+  startDate        DateTime
+  endDate          DateTime
+  color            String    @default("#99CCFF")
+  category         String?   @default("General")
+  location         String?
+  reminderAt       DateTime?
+  reminderSentAt   DateTime?
+  alarmAt          DateTime?
+  alarmSentAt      DateTime?
+  startNotifSentAt DateTime?
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([userId])
   @@index([reminderAt])
   @@index([alarmAt])
+  @@index([startDate])
   @@map("events")
 }
 
@@ -138,16 +140,27 @@ model Budget {
   @@map("budgets")
 }
 
-model UserExpenseSettings {
+
+model UserAppSettings {
   id                    String   @id @default(cuid())
   userId                String   @unique
-  summaryEnabled        Boolean  @default(false)
-  summaryTime           String   @default("20:00") // "HH:MM" UTC
+  // Alarm
+  alarmsEnabled         Boolean  @default(true)
+  // Task reminder — "HH:MM" offset before due time
+  taskReminderEnabled   Boolean  @default(true)
+  taskReminderTime      String   @default("00:30")
+  // Event reminder — "HH:MM" offset before start
+  eventReminderEnabled  Boolean  @default(true)
+  eventReminderTime     String   @default("00:30")
+  // Expense notifications
+  expenseSummaryEnabled Boolean  @default(false)
+  expenseSummaryTime    String   @default("20:00")  // "HH:MM" UTC
   budget80AlertEnabled  Boolean  @default(true)
   budget100AlertEnabled Boolean  @default(true)
   user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt             DateTime @updatedAt
 
-  @@map("user_expense_settings")
+  @@map("user_app_settings")
 }
 
 enum TodoStatus {
@@ -163,24 +176,27 @@ enum TodoPriority {
 }
 
 model Todo {
-  id             String       @id @default(cuid())
-  title          String
-  description    String?
-  completed      Boolean      @default(false)
-  status         TodoStatus   @default(TODO)
-  priority       TodoPriority @default(MEDIUM)
-  dueDate        DateTime?
-  dueTime        String?
-  reminderAt     DateTime?
-  reminderSentAt DateTime?
-  alarmAt        DateTime?
-  alarmSentAt    DateTime?
-  userId         String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id               String       @id @default(cuid())
+  title            String
+  description      String?
+  completed        Boolean      @default(false)
+  status           TodoStatus   @default(TODO)
+  priority         TodoPriority @default(MEDIUM)
+  dueDate          DateTime?
+  dueTime          String?
+  startAt          DateTime?
+  startNotifSentAt DateTime?
+  reminderAt       DateTime?
+  reminderSentAt   DateTime?
+  alarmAt          DateTime?
+  alarmSentAt      DateTime?
+  userId           String
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   @@index([userId])
+  @@index([startAt])
   @@index([reminderAt])
   @@index([alarmAt])
   @@map("todos")

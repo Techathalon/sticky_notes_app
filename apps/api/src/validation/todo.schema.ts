@@ -10,6 +10,7 @@ export const createTodoSchema = z.object({
   priority:    todoPrioritySchema.optional(),
   dueDate:     z.string().datetime({ offset: true }).optional(),
   dueTime:     z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  startAt:     z.string().datetime({ offset: true }).nullable().optional(),
   reminderAt:  z.string().datetime({ offset: true }).nullable().optional(),
   alarmAt:     z.string().datetime({ offset: true }).nullable().optional(),
 });
@@ -22,6 +23,7 @@ export const updateTodoSchema = z.object({
   priority:    todoPrioritySchema.optional(),
   dueDate:     z.string().datetime({ offset: true }).nullable().optional(),
   dueTime:     z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+  startAt:     z.string().datetime({ offset: true }).nullable().optional(),
   reminderAt:  z.string().datetime({ offset: true }).nullable().optional(),
   alarmAt:     z.string().datetime({ offset: true }).nullable().optional(),
 });

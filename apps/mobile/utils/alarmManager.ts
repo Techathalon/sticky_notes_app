@@ -1,4 +1,7 @@
-import { Platform, Alert, NativeModules } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import { requestNotificationPermission } from './notifications';
 import notifee, {
   AndroidCategory,
   AndroidImportance,
@@ -47,19 +50,30 @@ async function ensureAlarmChannel(): Promise<void> {
 export async function checkAlarmSystemPermissions(): Promise<void> {
   if (Platform.OS !== 'android') return;
   try {
-    const batterySettings = await notifee.getPowerManagerInfo();
-    if (batterySettings.activity) {
-      Alert.alert(
-        'Disable Battery Optimization',
-        'For alarms to ring on time, disable battery optimization for Sticky Notes.',
-        [
-          { text: 'Later', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => notifee.openPowerManagerSettings() },
-        ],
-      );
+    // 1. Standard Android battery optimization — one-tap system dialog (no settings page needed).
+    //    requestIgnoreBatteryOptimizations() resolves false if already granted (skip the wait).
+    const dialogShown: boolean = await NativeModules.OverlayPermission.requestIgnoreBatteryOptimizations();
+    if (dialogShown) {
+      // Give the user a moment to respond to the system dialog before the next check.
+      await new Promise<void>((r) => setTimeout(r, 1500));
+    }
+
+    // 2. OEM battery manager (Samsung, Xiaomi, Huawei, etc.) — cannot be auto-granted.
+    //    Only show if battery optimization is STILL active — if the user already whitelisted
+    //    the app (via the dialog above or manually), isBatteryOptimizationEnabled() returns
+    //    false and we skip this modal so it never shows again.
+    const stillOptimized = await notifee.isBatteryOptimizationEnabled();
+    if (stillOptimized) {
+      const powerInfo = await notifee.getPowerManagerInfo();
+      if (powerInfo.activity) {
+        const showModal = _showBatteryOptModal;
+        if (showModal) {
+          await new Promise<void>((resolve) => { showModal(resolve); });
+        }
+      }
     }
   } catch {
-    // Non-critical — ignore if notifee APIs unavailable
+    // Non-critical — ignore if APIs unavailable
   }
 }
 
@@ -69,9 +83,48 @@ export async function scheduleLocalAlarm(
   alarmAt: Date,
   type: 'task' | 'event' = 'task'
 ): Promise<void> {
+  if (Platform.OS === 'ios') {
+    try {
+      const dismissedId = await AsyncStorage.getItem('lastDismissedAlarmId').catch(() => null);
+      if (dismissedId === id) {
+        await AsyncStorage.removeItem('lastDismissedAlarmId').catch(() => {});
+      }
+      await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+      await Notifications.scheduleNotificationAsync({
+        identifier: id,
+        content: {
+          title: type === 'event' ? '📅 Event Alarm' : '⏰ Task Alarm',
+          body: title,
+          sound: 'alarm.wav',
+          data: {
+            alarmTitle: title,
+            alarmType: type,
+            alarmId: id,
+            alarmAt: alarmAt.getTime().toString(),
+            type: 'alarm',
+          },
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: alarmAt,
+        },
+      });
+      console.log(`[AlarmManager] Scheduled local alarm on iOS: "${title}" at ${alarmAt.toLocaleTimeString()}`);
+    } catch (err) {
+      console.error('[AlarmManager] iOS scheduleLocalAlarm failed:', err);
+    }
+    return;
+  }
+
   if (Platform.OS !== 'android') return;
   try {
     await ensureAlarmChannel();
+    // Clear the dismissed-alarm guard ONLY for this specific alarm id, so rescheduling
+    // one alarm does not accidentally re-arm stale pendingAlarmPress entries for OTHER alarms.
+    const dismissedId = await AsyncStorage.getItem('lastDismissedAlarmId').catch(() => null);
+    if (dismissedId === id) {
+      await AsyncStorage.removeItem('lastDismissedAlarmId').catch(() => {});
+    }
     await notifee.createTriggerNotification(
       {
         id,
@@ -92,7 +145,7 @@ export async function scheduleLocalAlarm(
           },
           pressAction: { id: 'default', launchActivity: 'default' },
         },
-        data: { alarmTitle: title, alarmType: type },
+        data: { alarmTitle: title, alarmType: type, alarmId: id, alarmAt: alarmAt.getTime().toString() },
       },
       {
         type: TriggerType.TIMESTAMP,
@@ -102,7 +155,6 @@ export async function scheduleLocalAlarm(
         },
       }
     );
-    console.log('[AlarmManager] scheduled local alarm:', id);
   } catch (err) {
     console.error('[AlarmManager] scheduleLocalAlarm failed:', err);
   }
@@ -113,11 +165,47 @@ export async function scheduleLocalAlarm(
  * Call when task/event alarm is toggled off, edited, or deleted.
  */
 export async function cancelLocalAlarm(id: string): Promise<void> {
+  if (Platform.OS === 'ios') {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(id);
+    } catch {
+      // Alarm may not exist — ignore
+    }
+    return;
+  }
+
   if (Platform.OS !== 'android') return;
+
   try {
     await notifee.cancelTriggerNotification(id);
+    console.log('❌ Cancelling alarm from the alarm manager:', id);
+    const alarms = await notifee.getTriggerNotifications();
+    console.log('Remaining alarms from the alarm manager:', alarms.length);
   } catch {
     // Alarm may not exist — ignore
+  }
+}
+
+/**
+ * Cancel ALL pending local alarms.
+ * Call when the user disables alarms globally in settings.
+ */
+export async function cancelAllLocalAlarms(): Promise<void> {
+  if (Platform.OS === 'ios') {
+    try {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+    } catch (err) {
+      console.error('[AlarmManager] cancelAllLocalAlarms failed on iOS:', err);
+    }
+    return;
+  }
+
+  if (Platform.OS !== 'android') return;
+  try {
+    await notifee.cancelAllNotifications();
+    console.log('❌ All local alarms cancelled');
+  } catch (err) {
+    console.error('[AlarmManager] cancelAllLocalAlarms failed:', err);
   }
 }
 
@@ -127,28 +215,37 @@ export async function cancelLocalAlarm(id: string): Promise<void> {
  * Returns unsubscribe function.
  */
 export function registerNotifeeHandler(
-  onAlarm: (title: string, type: string) => void
+  onAlarm: (title: string, type: string, alarmId: string, alarmAt: string) => void
 ): () => void {
   if (Platform.OS !== 'android') return () => {};
   console.log('FRONETND ALARM PAGE REGISTERED');
   return notifee.onForegroundEvent(({ type, detail }) => {
     if (type === EventType.DELIVERED || type === EventType.PRESS) {
       const data = detail.notification?.data as
-        | { alarmTitle?: string; alarmType?: string }
+        | { alarmTitle?: string; alarmType?: string; alarmId?: string; alarmAt?: string }
         | undefined;
       if (data?.alarmTitle) {
-        onAlarm(data.alarmTitle, data.alarmType ?? 'task');
+        onAlarm(data.alarmTitle, data.alarmType ?? 'task', data.alarmId ?? '', data.alarmAt ?? '');
       }
     }
   });
 }
 
-// Module-level callback — registered by _layout.tsx so the styled modal can be shown
+// Module-level callbacks — registered by _layout.tsx so styled in-app modals can be shown
 // from anywhere without needing React hooks in this utility file.
-let _showOverlayModal: (() => void) | null = null;
+// Each accepts an onDismissed callback so the permission check can await user action.
+let _showOverlayModal: ((onDismissed: () => void) => void) | null = null;
+let _showFullScreenIntentModal: ((onDismissed: () => void) => void) | null = null;
+let _showBatteryOptModal: ((onDismissed: () => void) => void) | null = null;
 
-export function registerOverlayModalTrigger(fn: () => void) {
+export function registerOverlayModalTrigger(fn: (onDismissed: () => void) => void) {
   _showOverlayModal = fn;
+}
+export function registerFullScreenIntentModalTrigger(fn: (onDismissed: () => void) => void) {
+  _showFullScreenIntentModal = fn;
+}
+export function registerBatteryOptModalTrigger(fn: (onDismissed: () => void) => void) {
+  _showBatteryOptModal = fn;
 }
 
 /**
@@ -176,17 +273,10 @@ export async function checkAndPromptFullScreenIntent(): Promise<boolean> {
   try {
     const granted: boolean = await NativeModules.OverlayPermission.canUseFullScreenIntent();
     if (granted) return false;
-    Alert.alert(
-      'Enable Full Screen Alarms',
-      'To allow alarms to open automatically on your screen (even when using other apps), please enable "Full screen intents" for Sticky Notes.',
-      [
-        { text: 'Later', style: 'cancel' },
-        {
-          text: 'Open Settings',
-          onPress: () => NativeModules.OverlayPermission.openFullScreenIntentSettings(),
-        },
-      ],
-    );
+    const showModal = _showFullScreenIntentModal;
+    if (showModal) {
+      await new Promise<void>((resolve) => { showModal(resolve); });
+    }
     return true;
   } catch {
     return false;
@@ -202,29 +292,37 @@ export async function checkAndPromptOverlayPermission(): Promise<void> {
   if (Platform.OS !== 'android') return;
   const granted = await canDrawOverlays();
   if (granted) return;
-  _showOverlayModal?.();
+  const showModal = _showOverlayModal;
+  if (!showModal) return;
+  await new Promise<void>((resolve) => { showModal(resolve); });
 }
 
 /**
- * Check ALL permissions needed for alarm screen to open over other apps automatically.
- * Call this whenever user enables an alarm (task-editor / event-editor) AND on app open.
+ * Check ALL permissions needed for alarm screen to open automatically on time, in all situations:
+ *   - Phone locked / screen off
+ *   - User using another app
+ *   - App killed
  *
- * Required permissions:
- *   1. USE_FULL_SCREEN_INTENT (Android 14+) — allows alarm screen to appear over other apps
- *   2. SYSTEM_ALERT_WINDOW — display over other apps
- *   3. Battery optimization OFF — prevents OS from delaying alarm delivery
+ * USE_FULL_SCREEN_INTENT alone handles all three cases — SYSTEM_ALERT_WINDOW is not needed.
+ * Battery optimization must also be OFF so Samsung/OEM does not delay alarm delivery.
  *
- * Alerts are shown one at a time with a short delay between them so they don't overlap.
+ * Call whenever user enables an alarm (task-editor / event-editor) AND on every app open.
  */
 export async function checkAllAlarmPermissions(): Promise<void> {
+  if (Platform.OS === 'ios') {
+    await requestNotificationPermission();
+    return;
+  }
   if (Platform.OS !== 'android') return;
-  // 1. Full screen intent — most critical, needed to auto-open over other apps
-  const fsiNotGranted = await checkAndPromptFullScreenIntent();
-  // Small delay so alerts don't stack on top of each other
-  if (fsiNotGranted) await new Promise<void>((r) => setTimeout(r, 600));
-  // 2. Display over other apps
+  // Only ask once — first time user sets an alarm (task, event, or settings toggle).
+  // Flag is written BEFORE showing modals so "Later" also permanently counts as asked.
+  // After this, no alarm permission modals will ever auto-appear again.
+  try {
+    const alreadyAsked = await AsyncStorage.getItem('alarmPermissionsAsked');
+    if (alreadyAsked) return;
+    await AsyncStorage.setItem('alarmPermissionsAsked', 'true');
+  } catch { /* proceed if storage unavailable */ }
+  await checkAndPromptFullScreenIntent();
+  await checkAlarmSystemPermissions();
   await checkAndPromptOverlayPermission();
-  // 3. Battery optimization
-  await new Promise<void>((r) => setTimeout(r, 600));
-  checkAlarmSystemPermissions();
 }

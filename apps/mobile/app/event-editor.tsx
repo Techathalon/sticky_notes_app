@@ -4,10 +4,11 @@ import {
   ScrollView, Switch, ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { useAppAlert } from '../components/AppAlert';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { IOSPickerModal } from '../components/IOSPickerModal';
 import { useEventsStore } from '../store/eventsStore';
 import { useCalendarStore } from '../store/calendarStore';
 import { scheduleLocalAlarm, cancelLocalAlarm, checkAllAlarmPermissions } from '../utils/alarmManager';
@@ -43,6 +44,7 @@ function isSameDay(a: Date, b: Date) {
 // ─── Screen ───────────────────────────────────────────────────
 
 export default function EventEditorScreen() {
+  const insets = useSafeAreaInsets();
   const c = useThemeColors();
   const { showAlert, AlertModal } = useAppAlert();
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -72,9 +74,7 @@ const [alarmEnabled, setAlarmEnabled] = useState(!!existing?.alarmAt);
 
 const handleAlarmToggle = (value: boolean) => {
   setAlarmEnabled(value);
-  if (value) {
-    checkAllAlarmPermissions();
-  }
+  if (value) checkAllAlarmPermissions();
 };
 
 const isPast = startDate < new Date();
@@ -117,9 +117,14 @@ const [showEndTime,   setShowEndTime]   = useState(false);
         }
       }
 
-      // Compute alarmAt for backend alarm push (exact start time)
-      const alarmAt: string | null = (alarmEnabled && startDate > new Date())
-        ? startDate.toISOString()
+      // Compute alarmAt — zero seconds/ms so alarm fires at exactly HH:mm:00
+      let alarmDate = new Date(startDate);
+      alarmDate.setSeconds(0, 0);
+      if (alarmDate <= new Date() && alarmDate.getTime() > Date.now() - 60_000) {
+        alarmDate = new Date(Date.now() + 5_000);
+      }
+      const alarmAt: string | null = (alarmEnabled && alarmDate > new Date())
+        ? alarmDate.toISOString()
         : null;
 
       if (isNew) {
@@ -162,7 +167,7 @@ const [showEndTime,   setShowEndTime]   = useState(false);
   }, [title, description, location, color, category, startDate, endDate, alarmEnabled, existing, isNew, eventReminderEnabled, eventReminderHours, eventReminderMinutes, setJumpDate]);
 
   return (
-    <SafeAreaView style={[s.root, { backgroundColor: c.bg }]} edges={['top']}>
+    <View style={[s.root, { backgroundColor: c.bg, paddingTop: insets.top }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       {/* ── Header ── */}
       <View style={[s.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
@@ -286,9 +291,33 @@ const [showEndTime,   setShowEndTime]   = useState(false);
             <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
           </View>
         </TouchableOpacity>
-        {showStartDate && (
-          <DateTimePicker value={startDate} mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+        {Platform.OS === 'ios' ? (
+          <IOSPickerModal
+            visible={showStartDate}
+            value={startDate}
+            mode="date"
+            onCancel={() => setShowStartDate(false)}
+            onDone={(d) => {
+              setShowStartDate(false);
+              if (d) {
+                const newStart = new Date(d);
+                newStart.setHours(startDate.getHours(), startDate.getMinutes());
+                if (newStart < new Date()) {
+                  const now = new Date();
+                  now.setMinutes(now.getMinutes() + 5);
+                  newStart.setHours(now.getHours(), now.getMinutes());
+                }
+                setStartDate(newStart);
+                if (endDate <= newStart) {
+                  const newEnd = new Date(newStart);
+                  newEnd.setHours(newStart.getHours() + 1, newStart.getMinutes());
+                  setEndDate(newEnd);
+                }
+              }
+            }}
+          />
+        ) : showStartDate && (
+          <DateTimePicker value={startDate} mode="date" display="default"
             onChange={(_, d) => {
               setShowStartDate(false);
               if (d) {
@@ -322,9 +351,29 @@ const [showEndTime,   setShowEndTime]   = useState(false);
             <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
           </View>
         </TouchableOpacity>
-        {showStartTime && (
-          <DateTimePicker value={startDate} mode="time" is24Hour={false}
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+        {Platform.OS === 'ios' ? (
+          <IOSPickerModal
+            visible={showStartTime}
+            value={startDate}
+            mode="time"
+            onCancel={() => setShowStartTime(false)}
+            onDone={(d) => {
+              setShowStartTime(false);
+              if (d) {
+                const newStart = new Date(startDate);
+                newStart.setHours(d.getHours(), d.getMinutes());
+                setStartDate(newStart);
+                if (newStart < new Date()) setAlarmEnabled(false);
+                if (endDate <= newStart) {
+                  const newEnd = new Date(newStart);
+                  newEnd.setMinutes(newStart.getMinutes() + 30);
+                  setEndDate(newEnd);
+                }
+              }
+            }}
+          />
+        ) : showStartTime && (
+          <DateTimePicker value={startDate} mode="time" is24Hour={false} display="default"
             onChange={(_, d) => {
               setShowStartTime(false);
               if (d) {
@@ -354,10 +403,30 @@ const [showEndTime,   setShowEndTime]   = useState(false);
             <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
           </View>
         </TouchableOpacity>
-        {showEndDate && (
-          <DateTimePicker value={endDate} mode="date"
+        {Platform.OS === 'ios' ? (
+          <IOSPickerModal
+            visible={showEndDate}
+            value={endDate}
+            mode="date"
             minimumDate={startDate}
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onCancel={() => setShowEndDate(false)}
+            onDone={(d) => {
+              setShowEndDate(false);
+              if (d) {
+                const n = new Date(d);
+                n.setHours(endDate.getHours(), endDate.getMinutes());
+                if (n <= startDate) {
+                  const bumped = new Date(startDate);
+                  bumped.setHours(startDate.getHours() + 1, startDate.getMinutes());
+                  setEndDate(bumped);
+                } else {
+                  setEndDate(n);
+                }
+              }
+            }}
+          />
+        ) : showEndDate && (
+          <DateTimePicker value={endDate} mode="date" minimumDate={startDate} display="default"
             onChange={(_, d) => {
               setShowEndDate(false);
               if (d) {
@@ -387,10 +456,32 @@ const [showEndTime,   setShowEndTime]   = useState(false);
             <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
           </View>
         </TouchableOpacity>
-        {showEndTime && (
+        {Platform.OS === 'ios' ? (
+          <IOSPickerModal
+            visible={showEndTime}
+            value={endDate}
+            mode="time"
+            minimumDate={isSameDay(startDate, endDate) ? startDate : undefined}
+            onCancel={() => setShowEndTime(false)}
+            onDone={(d) => {
+              setShowEndTime(false);
+              if (d) {
+                const n = new Date(endDate);
+                n.setHours(d.getHours(), d.getMinutes());
+                if (n <= startDate) {
+                  const bumped = new Date(startDate);
+                  bumped.setMinutes(startDate.getMinutes() + 30);
+                  setEndDate(bumped);
+                } else {
+                  setEndDate(n);
+                }
+              }
+            }}
+          />
+        ) : showEndTime && (
           <DateTimePicker value={endDate} mode="time" is24Hour={false}
             minimumDate={isSameDay(startDate, endDate) ? startDate : undefined}
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            display="default"
             onChange={(_, d) => {
               setShowEndTime(false);
               if (d) {
@@ -435,7 +526,7 @@ const [showEndTime,   setShowEndTime]   = useState(false);
       </ScrollView>
       {AlertModal}
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 

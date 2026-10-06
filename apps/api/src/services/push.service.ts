@@ -41,7 +41,7 @@ export async function sendPushNotification(
       // Android: high-priority delivery
       android: {
         priority: 'high',
-        notification: { sound: 'default', icon: 'notification_icon' },
+        notification: { sound: 'default', icon: 'ic_launcher', color: '#6366F1' },
       },
       // iOS (APNs via FCM)
       apns: {
@@ -71,6 +71,7 @@ export async function sendAlarmNotification(
   alarmId: string,
   alarmTitle: string,
   alarmType: 'task' | 'event',
+  alarmAt: string,
 ): Promise<void> {
   const msg = getMessaging();
   if (!msg || tokens.length === 0) return;
@@ -82,7 +83,7 @@ export async function sendAlarmNotification(
       // so AlarmMessagingService.kt can show a fullScreenIntent local notification.
       // alarmId is sent so AlarmMessagingService uses the same notification ID as notifee,
       // preventing a duplicate notification.
-      data: { type: 'alarm', alarmId, alarmTitle, alarmType },
+      data: { type: 'alarm', alarmId, alarmTitle, alarmType, alarmAt },
       android: { priority: 'high' }, // HIGH priority wakes device even in doze mode
       apns: {
         headers: { 'apns-priority': '10' },
@@ -124,6 +125,28 @@ export async function sendScheduleAlarmToDevices(
     });
   } catch (err) {
     console.error('[FCM] sendScheduleAlarmToDevices error:', err);
+  }
+}
+
+/**
+ * Silent data-only FCM — tells all devices to reload synced app settings from the backend.
+ * No notification banner is shown.
+ */
+export async function sendSyncSettings(tokens: string[]): Promise<void> {
+  const msg = getMessaging();
+  if (!msg || tokens.length === 0) return;
+  try {
+    await msg.sendEachForMulticast({
+      tokens,
+      data: { type: 'sync_settings' },
+      android: { priority: 'normal' },
+      apns: {
+        headers: { 'apns-priority': '5' },
+        payload: { aps: { contentAvailable: true } },
+      },
+    });
+  } catch (err) {
+    console.error('[FCM] sendSyncSettings error:', err);
   }
 }
 

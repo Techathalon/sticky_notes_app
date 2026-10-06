@@ -201,6 +201,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingBottom: 60,
+    overflow: 'hidden',
   },
   containerCompact: {
     flex: 0,

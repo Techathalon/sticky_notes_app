@@ -46,7 +46,7 @@ export class ExpensesService {
   private async checkBudgetAlerts(userId: string, month: string, newExpenseAmount: number): Promise<void> {
     try {
       const [settings, budget, allExpenses] = await Promise.all([
-        prisma.userExpenseSettings.findUnique({ where: { userId } }),
+        prisma.userAppSettings.findUnique({ where: { userId } }),
         prisma.budget.findUnique({ where: { userId_month: { userId, month } } }),
         prisma.expense.findMany({ where: { userId, date: { startsWith: month } } }),
       ]);
@@ -111,20 +111,41 @@ export class ExpensesService {
   }
 
   async getExpenseSettings(userId: string) {
-    const settings = await prisma.userExpenseSettings.upsert({
+    const settings = await prisma.userAppSettings.upsert({
       where: { userId },
       update: {},
       create: { userId },
     });
-    return settings;
+    return {
+      summaryEnabled:        settings.expenseSummaryEnabled,
+      summaryTime:           settings.expenseSummaryTime,
+      budget80AlertEnabled:  settings.budget80AlertEnabled,
+      budget100AlertEnabled: settings.budget100AlertEnabled,
+    };
   }
 
   async updateExpenseSettings(userId: string, input: UpdateExpenseSettingsInput) {
-    const settings = await prisma.userExpenseSettings.upsert({
+    const settings = await prisma.userAppSettings.upsert({
       where: { userId },
-      update: input,
-      create: { userId, ...input },
+      update: {
+        expenseSummaryEnabled: input.summaryEnabled,
+        expenseSummaryTime:    input.summaryTime,
+        budget80AlertEnabled:  input.budget80AlertEnabled,
+        budget100AlertEnabled: input.budget100AlertEnabled,
+      },
+      create: {
+        userId,
+        expenseSummaryEnabled: input.summaryEnabled,
+        expenseSummaryTime:    input.summaryTime,
+        budget80AlertEnabled:  input.budget80AlertEnabled,
+        budget100AlertEnabled: input.budget100AlertEnabled,
+      },
     });
-    return settings;
+    return {
+      summaryEnabled:        settings.expenseSummaryEnabled,
+      summaryTime:           settings.expenseSummaryTime,
+      budget80AlertEnabled:  settings.budget80AlertEnabled,
+      budget100AlertEnabled: settings.budget100AlertEnabled,
+    };
   }
 }

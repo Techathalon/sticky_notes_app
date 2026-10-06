@@ -27,7 +27,6 @@ async function ensureChannel() {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#0EA5E9',
         enableVibrate: true,
-        sound: 'alarm.wav',
       });
     } catch {
       // silently ignore
@@ -37,11 +36,18 @@ async function ensureChannel() {
 ensureChannel();
 
 export async function requestNotificationPermission(): Promise<boolean> {
-if (!N) return false;
+  if (!N) return false;
   try {
     const { status: existing } = await N.getPermissionsAsync();
     if (existing === 'granted') return true;
-    const { status } = await N.requestPermissionsAsync();
+    const { status } = await N.requestPermissionsAsync({
+      ios: {
+        allowAlert: true,   // show notification banners (reminders, expense alerts)
+        allowBadge: true,   // allow app icon badge count
+        allowSound: true,   // play sounds for reminders and expense alerts
+        allowProvisional: false,
+      },
+    });
     return status === 'granted';
   } catch {
     return false;
@@ -50,6 +56,8 @@ if (!N) return false;
 
 export async function requestAlarmPermission(): Promise<boolean> {
   if (!N) return false;
+  // USE_EXACT_ALARM permission is Android-only — no iOS equivalent needed.
+  if (Platform.OS !== 'android') return true;
   try {
     const { granted } = await N.requestPermissionsAsync({
       android: { alarm: true },

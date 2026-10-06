@@ -14,6 +14,8 @@
     "build": "pnpm -r run build",
     "build:api": "pnpm --filter api run build",
     "build:mobile": "pnpm --filter mobile run build",
+    "mobile:clear:android": "pnpm --filter mobile clear:android",
+    "mobile:clear:ios": "pnpm --filter mobile clear:ios",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
     "clean": "pnpm -r exec rm -rf dist build .tsbuildinfo node_modules/.cache",

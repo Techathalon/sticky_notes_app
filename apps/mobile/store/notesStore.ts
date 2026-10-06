@@ -7,7 +7,12 @@ interface NotesState {
   isLoading: boolean;
   error: string | null;
 
-  // Actions — TODO: implement each using notesApi
+  // In-memory session unlock set — never persisted, resets on app close
+  unlockedNoteIds: Set<string>;
+  unlockNote: (id: string) => void;
+  isNoteUnlocked: (id: string) => boolean;
+  clearUnlocked: () => void;
+
   fetchNotes: () => Promise<void>;
   createNote: (data: CreateNoteRequest) => Promise<Note>;
   updateNote: (id: string, data: UpdateNoteRequest) => Promise<void>;
@@ -15,10 +20,23 @@ interface NotesState {
   reset: () => void;
 }
 
-export const useNotesStore = create<NotesState>((set) => ({
+export const useNotesStore = create<NotesState>((set, get) => ({
   notes: [],
   isLoading: false,
   error: null,
+
+  unlockedNoteIds: new Set<string>(),
+
+  unlockNote: (id) =>
+    set((s) => {
+      const next = new Set(s.unlockedNoteIds);
+      next.add(id);
+      return { unlockedNoteIds: next };
+    }),
+
+  isNoteUnlocked: (id) => get().unlockedNoteIds.has(id),
+
+  clearUnlocked: () => set({ unlockedNoteIds: new Set() }),
 
   fetchNotes: async () => {
     set({ isLoading: true, error: null });
@@ -39,16 +57,14 @@ export const useNotesStore = create<NotesState>((set) => ({
   },
 
   updateNote: async (id, data) => {
-    // TODO: call notesApi.update, update in notes array
     const updated = await notesApi.update(id, data);
     set((s) => ({ notes: s.notes.map((n) => (n.id === id ? updated : n)) }));
   },
 
   deleteNote: async (id) => {
-    // TODO: call notesApi.remove, filter from notes array
     await notesApi.remove(id);
     set((s) => ({ notes: s.notes.filter((n) => n.id !== id) }));
   },
 
-  reset: () => set({ notes: [], isLoading: false, error: null }),
+  reset: () => set({ notes: [], isLoading: false, error: null, unlockedNoteIds: new Set() }),
 }));

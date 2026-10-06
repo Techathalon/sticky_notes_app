@@ -1,18 +1,21 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, ActivityIndicator,
-  Modal, Share
+  Modal, Share, Platform,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { IOSPickerModal } from '../IOSPickerModal';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useNotesStore } from '../../store/notesStore';
 import { useAppAlert } from '../AppAlert';
 import { EmptyState } from '../EmptyState';
 import { NoteDecoration } from '../NoteDecoration';
+import { NoteLockOverlay } from '../NoteLockOverlay';
 import { COLORS } from '../../constants/colors';
 import { useThemeColors } from '../../store/themeStore';
 import { seg, ROTATIONS } from './segStyles';
+import type { Note } from '@repo/types';
 
 // Extracts plain text from note content (handles both old plain string and new blocks JSON)
 function extractText(content: string | null | undefined): string {
@@ -40,9 +43,19 @@ const NOTE_CATS_META: { label: string; icon: React.ComponentProps<typeof Ionicon
 export function NotesSegment({ search }: { search: string }) {
   const c = useThemeColors();
   const { showAlert, AlertModal } = useAppAlert();
-  const { notes, isLoading, fetchNotes, deleteNote } = useNotesStore();
+  const { notes, isLoading, fetchNotes, deleteNote, unlockNote, isNoteUnlocked } = useNotesStore();
   const router = useRouter();
   useFocusEffect(useCallback(() => { fetchNotes(); }, [fetchNotes]));
+
+  const [pendingLockedNote, setPendingLockedNote] = useState<{ id: string; title: string } | null>(null);
+
+  const handleNoteTap = useCallback((item: Note) => {
+    if (item.isLocked && !isNoteUnlocked(item.id)) {
+      setPendingLockedNote({ id: item.id, title: item.title });
+      return;
+    }
+    router.push(`/note-editor?id=${item.id}`);
+  }, [isNoteUnlocked, router]);
 
   const [catFilter, setCatFilter]                   = useState<string | null>(null);
   const [catDropdownVisible, setCatDropdownVisible] = useState(false);
@@ -125,28 +138,60 @@ export function NotesSegment({ search }: { search: string }) {
         </View>
       </View>
 
-      {showFromPicker && (
-        <DateTimePicker value={dateFrom ?? new Date()} mode="date" display="default"
-          maximumDate={dateTo ?? new Date()}
-          onChange={(_, d) => {
-            setShowFromPicker(false);
-            if (d) {
+      {Platform.OS === 'ios' ? (
+        <>
+          <IOSPickerModal
+            visible={showFromPicker}
+            value={dateFrom ?? new Date()}
+            mode="date"
+            maximumDate={dateTo ?? undefined}
+            onCancel={() => setShowFromPicker(false)}
+            onDone={(d) => {
+              setShowFromPicker(false);
               if (dateTo && d > dateTo) setDateTo(null);
               setDateFrom(d);
-            }
-          }} />
-      )}
-      {showToPicker && (
-        <DateTimePicker value={dateTo ?? new Date()} mode="date" display="default"
-          minimumDate={dateFrom ?? undefined}
-          maximumDate={new Date()}
-          onChange={(_, d) => {
-            setShowToPicker(false);
-            if (d) {
+            }}
+          />
+          <IOSPickerModal
+            visible={showToPicker}
+            value={dateTo ?? new Date()}
+            mode="date"
+            minimumDate={dateFrom ?? undefined}
+            maximumDate={new Date()}
+            onCancel={() => setShowToPicker(false)}
+            onDone={(d) => {
+              setShowToPicker(false);
               if (dateFrom && d < dateFrom) setDateFrom(null);
               setDateTo(d);
-            }
-          }} />
+            }}
+          />
+        </>
+      ) : (
+        <>
+          {showFromPicker && (
+            <DateTimePicker value={dateFrom ?? new Date()} mode="date" display="default"
+              maximumDate={dateTo ?? new Date()}
+              onChange={(_, d) => {
+                setShowFromPicker(false);
+                if (d) {
+                  if (dateTo && d > dateTo) setDateTo(null);
+                  setDateFrom(d);
+                }
+              }} />
+          )}
+          {showToPicker && (
+            <DateTimePicker value={dateTo ?? new Date()} mode="date" display="default"
+              minimumDate={dateFrom ?? undefined}
+              maximumDate={new Date()}
+              onChange={(_, d) => {
+                setShowToPicker(false);
+                if (d) {
+                  if (dateFrom && d < dateFrom) setDateFrom(null);
+                  setDateTo(d);
+                }
+              }} />
+          )}
+        </>
       )}
 
       {/* Category bottom-sheet modal */}
@@ -192,14 +237,27 @@ export function NotesSegment({ search }: { search: string }) {
             return (
               <View style={[seg.noteCard, { backgroundColor: item.color, transform: [{ rotate: rotation }] }]}>
                 <NoteDecoration index={index} />
-                <TouchableOpacity onPress={() => router.push(`/note-editor?id=${item.id}`)} activeOpacity={0.8} style={{ flex: 1 }}>
+                <TouchableOpacity onPress={() => handleNoteTap(item)} activeOpacity={0.8} style={{ flex: 1 }}>
                   <Text style={seg.noteTitle} numberOfLines={2}>{item.title}</Text>
                   {extractText(item.content) ? <Text style={seg.noteContent} numberOfLines={4}>{extractText(item.content)}</Text> : null}
                 </TouchableOpacity>
+                {/* Lock overlay — shown on top of card content when note is locked */}
+                {item.isLocked && (
+                  <TouchableOpacity
+                    style={seg.cardLockOverlay}
+                    onPress={() => handleNoteTap(item)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={seg.cardLockBadge}>
+                      <Ionicons name="lock-closed" size={20} color="#0284C7" />
+                    </View>
+                    <Text style={seg.cardLockLabel}>Locked</Text>
+                  </TouchableOpacity>
+                )}
                 <View style={seg.noteFooter}>
                   <Text style={seg.noteDate}>{date}</Text>
                   <View style={seg.noteActions}>
-                    <TouchableOpacity onPress={() => router.push(`/note-editor?id=${item.id}`)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <TouchableOpacity onPress={() => handleNoteTap(item)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
                       <Ionicons name="create-outline" size={18} color="#777" />
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -224,6 +282,19 @@ export function NotesSegment({ search }: { search: string }) {
         />
       )}
       {AlertModal}
+      {pendingLockedNote && (
+        <NoteLockOverlay
+          visible={!!pendingLockedNote}
+          noteTitle={pendingLockedNote.title}
+          onSuccess={() => {
+            unlockNote(pendingLockedNote.id);
+            const id = pendingLockedNote.id;
+            setPendingLockedNote(null);
+            router.push(`/note-editor?id=${id}`);
+          }}
+          onCancel={() => setPendingLockedNote(null)}
+        />
+      )}
     </View>
   );
 }

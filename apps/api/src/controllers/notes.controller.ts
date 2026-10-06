@@ -7,6 +7,7 @@ import { CreateNoteInput, UpdateNoteInput } from '../validation/note.schema';
 import { uploadImage, deleteImage } from '../services/storage.service';
 import { AppError } from '../middleware/errorHandler';
 import { env } from '../config';
+//import { string } from 'zod';
 
 const VALID_CATEGORIES = ['Food', 'Transport', 'Shopping', 'Health', 'Bills', 'Other'] as const;
 type ExpenseCategory = typeof VALID_CATEGORIES[number];
@@ -123,14 +124,26 @@ For each expense found, return:
 - title: short description of what was spent on (string, max 50 chars)
 - category: exactly one of: Food, Transport, Shopping, Health, Bills, Other
 - snippet: the exact sentence or phrase from the note that mentions this expense (max 80 chars)
+- date: date of the expense in YYYY-MM-DD format IF mentioned, otherwise null
 
 Rules:
 - Only include real spending/payment mentions with a numeric amount
 - Do not include hypothetical, future, or estimated amounts
+- Extract date only if clearly mentioned (e.g. "yesterday", "on 5 Jan", "12/03/2026")
+- Convert relative dates like "yesterday", "today" into actual YYYY-MM-DD
+- If no date is mentioned → return null
 - If the same expense appears multiple times, include it only once
 
 Return ONLY a valid JSON array, nothing else. Example:
-[{"amount":250,"title":"Lunch at café","category":"Food","snippet":"spent 250 on lunch at café"}]
+[
+  {
+    "amount": 250,
+    "title": "Lunch at café",
+    "category": "Food",
+    "snippet": "spent 250 on lunch at café",
+    "date": "2026-04-10"
+  }
+]
 
 If no expenses found, return: []
 
@@ -152,7 +165,7 @@ ${text}`;
       const parsed: unknown = JSON.parse(jsonMatch[0]);
       if (!Array.isArray(parsed)) { res.json({ data: [] }); return; }
 
-      type RawExpense = { amount: unknown; title: unknown; category: unknown; snippet: unknown };
+      type RawExpense = { amount: unknown; title: unknown; category: unknown; snippet: unknown ;date?: unknown};
       const results = (parsed as RawExpense[])
         .filter((item) =>
           typeof item.amount === 'number' &&
@@ -160,12 +173,23 @@ ${text}`;
           typeof item.title === 'string' &&
           VALID_CATEGORIES.includes(item.category as ExpenseCategory),
         )
-        .map((item) => ({
-          amount: item.amount as number,
-          title: String(item.title).slice(0, 50).trim(),
-          category: item.category as ExpenseCategory,
-          snippet: String(item.snippet ?? '').slice(0, 80).trim(),
-        }));
+        .map((item) => {
+    let formattedDate: string;
+    const parsedDate = new Date(item.date as string);
+    if (item.date && !isNaN(parsedDate.getTime())) {
+      formattedDate = parsedDate.toISOString().split('T')[0];
+    } else {
+      formattedDate = new Date().toISOString().split('T')[0];
+    }
+    console.log("Expense:", item.title, 'from the backend:  Parsed date:', item.date, 'Formatted date:', formattedDate);
+    return {
+      amount: item.amount as number,
+      title: String(item.title).slice(0, 50).trim(),
+      category: item.category as ExpenseCategory,
+      snippet: String(item.snippet ?? '').slice(0, 80).trim(),
+      date: formattedDate, 
+    };
+  });
 
       res.json({ data: results });
     } catch (err) {

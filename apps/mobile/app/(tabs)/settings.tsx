@@ -2,17 +2,18 @@ import { useState } from 'react';
 import { useAppAlert } from '../../components/AppAlert';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, ScrollView, Switch,
+  ActivityIndicator, ScrollView, Switch, Linking,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
 import { useThemeStore, useThemeColors } from '../../store/themeStore';
 import { useNotificationsStore } from '../../store/notificationsStore';
 import { requestAlarmPermission } from '../../utils/notifications';
-import { checkAlarmSystemPermissions } from '../../utils/alarmManager';
+import { checkAllAlarmPermissions, cancelAllLocalAlarms } from '../../utils/alarmManager';
 import { AUTH_COLORS, COLORS } from '../../constants/colors';
+import { GradientScreen } from '@/components/GradientScreen';
 
 // ─── Settings Row ──────────────────────────────────────────────
 
@@ -52,17 +53,23 @@ function SettingRow({
 export default function SettingsScreen() {
   const { user, logout }        = useAuthStore();
   const { themeMode, setThemeMode } = useThemeStore();
-  const { alarmsEnabled, setAlarmsEnabled } = useNotificationsStore();
+  const {
+    alarmsEnabled, setAlarmsEnabled, notificationsEnabled,
+    settingsSyncEnabled, setSettingsSyncEnabled,
+  } = useNotificationsStore();
   const c = useThemeColors();
   const { showAlert, AlertModal } = useAppAlert();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const handleToggleAlarms = (v: boolean) => {
-    setAlarmsEnabled(v);
-    if (v) {
-      requestAlarmPermission();
-      checkAlarmSystemPermissions();
+  const handleToggleAlarms = async (v: boolean) => {
+    if (!v) {
+      setAlarmsEnabled(false);
+      await cancelAllLocalAlarms();
+      return;
     }
+    setAlarmsEnabled(true);
+    requestAlarmPermission();
+    await checkAllAlarmPermissions();
   };
 
   const avatarLetter = (user?.name ?? user?.email ?? '?')[0].toUpperCase();
@@ -91,8 +98,8 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={[s.safe, { backgroundColor: c.bg }]}>
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+    <GradientScreen style={s.root}>
+      <ScrollView style={s.scrollcontainer}  showsVerticalScrollIndicator={false}>
 
         {/* Profile card */}
         <View style={s.profileCard}>
@@ -150,27 +157,57 @@ export default function SettingsScreen() {
               ))}
             </View>
           </View>
+          <View style={!notificationsEnabled ? { opacity: 0.5 } : undefined}>
+            <SettingRow
+              icon="notifications-outline"
+              iconBg="#F0FDF4"
+              iconColor="#10B981"
+              label="Notifications"
+              sublabel={notificationsEnabled ? 'Configure task & event reminders' : 'Permission denied — tap to open Settings'}
+              onPress={notificationsEnabled ? () => router.push('/notification-settings') : () => Linking.openSettings()}
+              c={c}
+            />
+          </View>
+          <View style={!notificationsEnabled ? { opacity: 0.5 } : undefined}>
+            <SettingRow
+              icon="alarm-outline"
+              iconBg="#FFF1F2"
+              iconColor="#E11D48"
+              label="Alarms"
+              sublabel={notificationsEnabled ? 'Set reminders for tasks & events' : 'Notifications required'}
+              c={c}
+              right={
+                <Switch
+                  value={alarmsEnabled}
+                  onValueChange={handleToggleAlarms}
+                  disabled={!notificationsEnabled}
+                  trackColor={{ false: c.border, true: '#E11D48' }}
+                  thumbColor="#fff"
+                />
+              }
+            />
+          </View>
+        </View>
+
+        {/* SYNC */}
+        <Text style={[s.sectionHeader, { color: c.textMuted }]}>Sync</Text>
+        <View style={[s.section, { backgroundColor: c.surface }]}>
           <SettingRow
-            icon="notifications-outline"
-            iconBg="#F0FDF4"
-            iconColor="#10B981"
-            label="Notifications"
-            sublabel="Configure task & event reminders"
-            onPress={() => router.push('/notification-settings')}
-            c={c}
-          />
-          <SettingRow
-            icon="alarm-outline"
-            iconBg="#FFF1F2"
-            iconColor="#E11D48"
-            label="Alarms"
-            sublabel="Set reminders for tasks & events"
+            icon="sync-outline"
+            iconBg="#F0F9FF"
+            iconColor="#0EA5E9"
+            label="Sync Settings"
+            sublabel={
+              settingsSyncEnabled
+                ? 'Settings are shared across all your devices'
+                : 'Each device has its own independent settings'
+            }
             c={c}
             right={
               <Switch
-                value={alarmsEnabled}
-                onValueChange={handleToggleAlarms}
-                trackColor={{ false: c.border, true: '#E11D48' }}
+                value={settingsSyncEnabled}
+                onValueChange={setSettingsSyncEnabled}
+                trackColor={{ false: c.border, true: '#0EA5E9' }}
                 thumbColor="#fff"
               />
             }
@@ -202,16 +239,15 @@ export default function SettingsScreen() {
 
       </ScrollView>
       {AlertModal}
-    </SafeAreaView>
+    </GradientScreen>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8FAFC' },
-  scroll: { paddingBottom: 5 },
-
+  root: { flex: 1, backgroundColor: 'transparent' },
+  scrollcontainer: { marginBottom: 4 },
   profileCard: {
     alignItems: 'center',
     paddingTop: 32, paddingBottom: 28, paddingHorizontal: 32,

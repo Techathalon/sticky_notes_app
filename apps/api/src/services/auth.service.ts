@@ -19,9 +19,8 @@ import { sendResetEmail } from './email.service';
 export class AuthService {
   private async createRefreshToken(userId: string): Promise<string> {
     const token = crypto.randomBytes(64).toString('hex');
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
     const record = await prisma.refreshToken.create({
-      data: { userId, token, expiresAt },
+      data: { userId, token },
     });
     return record.id;
   }
@@ -105,7 +104,7 @@ export class AuthService {
       include: { user: true },
     });
 
-    if (!record || record.expiresAt < new Date()) {
+    if (!record) {
       throw new AppError(401, 'Session expired, please log in again');
     }
 

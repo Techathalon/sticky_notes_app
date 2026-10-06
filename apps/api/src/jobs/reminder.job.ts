@@ -16,6 +16,8 @@ export function startReminderJob(): void {
     await checkEventReminders(from, to);
     await checkTodoAlarms(from, to);
     await checkEventAlarms(from, to);
+    await checkTodoStartNotifs(from, to);
+    await checkEventStartNotifs(from, to);
     await checkDailyExpenseSummary(now);
   });
 
@@ -106,7 +108,7 @@ async function checkTodoAlarms(from: Date, to: Date): Promise<void> {
       const tokens = todo.user.deviceTokens.map((d) => d.token);
       if (tokens.length > 0) {
         console.log("alarm sent to:", tokens);
-        await sendAlarmNotification(tokens, todo.id, todo.title, 'task');
+        await sendAlarmNotification(tokens, todo.id, todo.title, 'task', todo.alarmAt!.toISOString());
       }
       await prisma.todo.update({
         where: { id: todo.id },
@@ -131,7 +133,7 @@ async function checkEventAlarms(from: Date, to: Date): Promise<void> {
     for (const event of events) {
       const tokens = event.user.deviceTokens.map((d) => d.token);
       if (tokens.length > 0) {
-        await sendAlarmNotification(tokens, event.id, event.title, 'event');
+        await sendAlarmNotification(tokens, event.id, event.title, 'event', event.alarmAt!.toISOString());
       }
       await prisma.event.update({
         where: { id: event.id },
@@ -143,6 +145,67 @@ async function checkEventAlarms(from: Date, to: Date): Promise<void> {
   }
 }
 
+async function checkTodoStartNotifs(from: Date, to: Date): Promise<void> {
+  try {
+    const todos = await prisma.todo.findMany({
+      where: {
+        startAt: { gte: from, lte: to },
+        startNotifSentAt: null,
+        completed: false,
+      },
+      include: { user: { include: { deviceTokens: true } } },
+    });
+
+    for (const todo of todos) {
+      const tokens = todo.user.deviceTokens.map((d) => d.token);
+      if (tokens.length > 0) {
+        await sendPushNotification(
+          tokens,
+          '⏰ Task Started',
+          `${todo.title} is starting now`,
+          { type: 'task_start', todoId: todo.id },
+        );
+      }
+      await prisma.todo.update({
+        where: { id: todo.id },
+        data: { startNotifSentAt: new Date() },
+      });
+    }
+  } catch (err) {
+    console.error('[reminder-job] Todo start notif check failed:', err);
+  }
+}
+
+async function checkEventStartNotifs(from: Date, to: Date): Promise<void> {
+  try {
+    const events = await prisma.event.findMany({
+      where: {
+        startDate: { gte: from, lte: to },
+        startNotifSentAt: null,
+      },
+      include: { user: { include: { deviceTokens: true } } },
+    });
+
+    for (const event of events) {
+      const tokens = event.user.deviceTokens.map((d) => d.token);
+      if (tokens.length > 0) {
+        await sendPushNotification(
+          tokens,
+          '📅 Event Started',
+          `${event.title} is starting now`,
+          { type: 'event_start', eventId: event.id },
+        );
+      }
+      await prisma.event.update({
+        where: { id: event.id },
+        data: { startNotifSentAt: new Date() },
+      });
+    }
+  } catch (err) {
+    console.error('[reminder-job] Event start notif check failed:', err);
+  }
+}
+
 async function checkDailyExpenseSummary(now: Date): Promise<void> {
   try {
     // Current UTC HH:MM
@@ -151,8 +214,8 @@ async function checkDailyExpenseSummary(now: Date): Promise<void> {
     const currentTime = `${utcHH}:${utcMM}`;
 
     // Find all users whose summary is enabled and time matches current UTC minute
-    const settingsList = await prisma.userExpenseSettings.findMany({
-      where: { summaryEnabled: true, summaryTime: currentTime },
+    const settingsList = await prisma.userAppSettings.findMany({
+      where: { expenseSummaryEnabled: true, expenseSummaryTime: currentTime },
       include: { user: { include: { deviceTokens: true } } },
     });
 

@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, ActivityIndicator,
-  Modal, Share, StyleSheet,
+  View, Text, FlatList, ScrollView, TouchableOpacity, ActivityIndicator,
+  Modal, Share, StyleSheet, Platform,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { IOSPickerModal } from '../IOSPickerModal';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useEventsStore } from '../../store/eventsStore';
@@ -13,6 +14,7 @@ import { COLORS } from '../../constants/colors';
 import { useThemeColors } from '../../store/themeStore';
 import { formatDateRange } from '../../utils/dateUtils';
 import { seg } from './segStyles';
+import { useNotificationsStore } from '@/store/notificationsStore';
 
 function getEventStatus(start: string, end: string, now: Date) {
   const s = new Date(start).getTime();
@@ -35,8 +37,11 @@ function getEventStatus(start: string, end: string, now: Date) {
     else                     chip = `in ${diffDays} days`;
     return { state: 'future' as const, chip, chipColor: '#3B82F6', progress: 0 };
   }
-  const pastMs = n - e;
-  const pastDays = Math.floor(pastMs / 86400000);
+  // Compare calendar dates (midnight-normalized) so an event ending at 11 PM yesterday
+  // shows "Yesterday", not "Ended today" (which raw ms math would produce if <24h ago).
+  const endDay = new Date(e); endDay.setHours(0, 0, 0, 0);
+  const nowDay = new Date(n); nowDay.setHours(0, 0, 0, 0);
+  const pastDays = Math.round((nowDay.getTime() - endDay.getTime()) / 86400000);
   const chip = pastDays === 0 ? 'Ended today' : pastDays === 1 ? 'Yesterday' : `${pastDays} days ago`;
   return { state: 'past' as const, chip, chipColor: '#94A3B8', progress: 0 };
 }
@@ -65,6 +70,7 @@ export function EventsSegment({ search }: { search: string }) {
   const [dateTo,          setDateTo]          = useState<Date | null>(null);
   const [showFromPicker,  setShowFromPicker]  = useState(false);
   const [showToPicker,    setShowToPicker]    = useState(false);
+   const { alarmsEnabled } = useNotificationsStore();
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000);
@@ -155,28 +161,58 @@ export function EventsSegment({ search }: { search: string }) {
         </View>
       </View>
 
-      {showFromPicker && (
-        <DateTimePicker value={dateFrom ?? new Date()} mode="date" display="default"
-          maximumDate={dateTo ?? new Date()}
-          onChange={(_, d) => {
-            setShowFromPicker(false);
-            if (d) {
+      {Platform.OS === 'ios' ? (
+        <>
+          <IOSPickerModal
+            visible={showFromPicker}
+            value={dateFrom ?? new Date()}
+            mode="date"
+            maximumDate={dateTo ?? undefined}
+            onCancel={() => setShowFromPicker(false)}
+            onDone={(d) => {
+              setShowFromPicker(false);
               if (dateTo && d > dateTo) setDateTo(null);
               setDateFrom(d);
-            }
-          }} />
-      )}
-      {showToPicker && (
-        <DateTimePicker value={dateTo ?? new Date()} mode="date" display="default"
-          minimumDate={dateFrom ?? undefined}
-          maximumDate={new Date()}
-          onChange={(_, d) => {
-            setShowToPicker(false);
-            if (d) {
+            }}
+          />
+          <IOSPickerModal
+            visible={showToPicker}
+            value={dateTo ?? new Date()}
+            mode="date"
+            minimumDate={dateFrom ?? undefined}
+            onCancel={() => setShowToPicker(false)}
+            onDone={(d) => {
+              setShowToPicker(false);
               if (dateFrom && d < dateFrom) setDateFrom(null);
               setDateTo(d);
-            }
-          }} />
+            }}
+          />
+        </>
+      ) : (
+        <>
+          {showFromPicker && (
+            <DateTimePicker value={dateFrom ?? new Date()} mode="date" display="default"
+              maximumDate={dateTo ?? undefined}
+              onChange={(_, d) => {
+                setShowFromPicker(false);
+                if (d) {
+                  if (dateTo && d > dateTo) setDateTo(null);
+                  setDateFrom(d);
+                }
+              }} />
+          )}
+          {showToPicker && (
+            <DateTimePicker value={dateTo ?? new Date()} mode="date" display="default"
+              minimumDate={dateFrom ?? undefined}
+              onChange={(_, d) => {
+                setShowToPicker(false);
+                if (d) {
+                  if (dateFrom && d < dateFrom) setDateFrom(null);
+                  setDateTo(d);
+                }
+              }} />
+          )}
+        </>
       )}
 
       {/* Category bottom-sheet */}
@@ -207,7 +243,11 @@ export function EventsSegment({ search }: { search: string }) {
       </Modal>
 
       {filtered.length === 0
-        ? <EmptyState message={search || catFilter || dateFrom || dateTo ? 'No matching events' : 'No events yet'} variant="events" />
+        ? (
+          <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+            <EmptyState message={search || catFilter || dateFrom || dateTo ? 'No matching events' : 'No events yet'} variant="events" />
+          </ScrollView>
+        )
         : (
           <FlatList
             data={filtered}
@@ -228,7 +268,7 @@ export function EventsSegment({ search }: { search: string }) {
                         <Ionicons name="time-outline" size={12} color="#94A3B8" />
                         <Text style={seg.eventCardDate}>{formatDateRange(item.startDate, item.endDate)}</Text>
                       </View>
-                      {item.alarmAt && new Date(item.alarmAt) > now ? (
+                      {item.alarmAt && alarmsEnabled  && new Date(item.alarmAt) > now ? (
                         <View style={seg.eventCardDateRow}>
                           <Ionicons name="alarm-outline" size={12} color="#2b89ed" />
                           <Text style={[seg.eventCardDate, { color: '#2b89ed' }]}>
@@ -261,9 +301,10 @@ export function EventsSegment({ search }: { search: string }) {
                     </TouchableOpacity>
                     <TouchableOpacity
                       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      //style={styles.deleteBtn}
                       onPress={() => showAlert({ type: 'confirm', title: 'Delete Event', message: `Are you sure you want to delete "${item.title}"? This cannot be undone.`, buttons: [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => deleteEvent(item.id) }] })}
                     >
-                      <Ionicons name="trash-outline" size={16} color="#CBD5E1" />
+                      <Ionicons name="trash-outline" size={16} color="#94A3B8" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -295,4 +336,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden', marginHorizontal: 0,
   },
   progressFill: { height: 3, borderRadius: 2 },
+  deleteBtn: {
+    width: 28, height: 28, borderRadius: 8,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center', justifyContent: 'center',
+  },
 });
