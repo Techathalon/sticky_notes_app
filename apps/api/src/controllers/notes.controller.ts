@@ -1,5 +1,6 @@
 import { Response, NextFunction, Request } from 'express';
 import path from 'path';
+import sharp from 'sharp';
 import Anthropic from '@anthropic-ai/sdk';
 import { NotesService } from '../services/notes.service';
 import { AuthenticatedRequest } from '../middleware/auth';
@@ -10,12 +11,16 @@ import { env } from '../config';
 //import { string } from 'zod';
 
 const VALID_CATEGORIES = ['Food', 'Transport', 'Shopping', 'Health', 'Bills', 'Other'] as const;
-type ExpenseCategory = typeof VALID_CATEGORIES[number];
+type ExpenseCategory = (typeof VALID_CATEGORIES)[number];
 
 export class NotesController {
   private readonly service = new NotesService();
 
-  getNotes = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  getNotes = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       // TODO: implement in NotesService
       const notes = await this.service.getNotes(req.user!.id);
@@ -66,11 +71,7 @@ export class NotesController {
     }
   };
 
-  uploadImage = async (
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> => {
+  uploadImage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!req.file) throw new AppError(400, 'No file uploaded');
 
@@ -79,13 +80,36 @@ export class NotesController {
       if (mimeType === 'application/octet-stream') {
         const ext = path.extname(req.file.originalname).toLowerCase().slice(1);
         const MIME_MAP: Record<string, string> = {
-          jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
-          gif: 'image/gif',  webp: 'image/webp', heic: 'image/heic', heif: 'image/heif',
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          png: 'image/png',
+          gif: 'image/gif',
+          webp: 'image/webp',
+          heic: 'image/heic',
+          heif: 'image/heif',
         };
         mimeType = MIME_MAP[ext] ?? 'image/jpeg';
       }
 
-      const url = await uploadImage(req.file.buffer, mimeType);
+      let buffer = req.file.buffer;
+      try {
+        // Downscale image dimensions (max 1280px, maintaining aspect ratio) and convert to lightweight WebP
+        buffer = await sharp(buffer)
+          .rotate() // auto-orient based on EXIF
+          .resize({
+            width: 1280,
+            height: 1280,
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .webp({ quality: 80 })
+          .toBuffer();
+        mimeType = 'image/webp';
+      } catch (sharpErr) {
+        console.warn('[uploadImage] Sharp optimization skipped, uploading original:', sharpErr);
+      }
+
+      const url = await uploadImage(buffer, mimeType);
       res.json({ data: { url } });
     } catch (err) {
       next(err);
@@ -114,7 +138,10 @@ export class NotesController {
   ): Promise<void> => {
     try {
       const { text } = req.body;
-      if (!text?.trim()) { res.json({ data: [] }); return; }
+      if (!text?.trim()) {
+        res.json({ data: [] });
+        return;
+      }
 
       const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
       const prompt = `Analyze this note and extract any expenses the user has mentioned spending money on.
@@ -157,39 +184,64 @@ ${text}`;
       });
 
       const textBlock = response.content.find((b) => b.type === 'text');
-      if (!textBlock || textBlock.type !== 'text') { res.json({ data: [] }); return; }
+      if (!textBlock || textBlock.type !== 'text') {
+        res.json({ data: [] });
+        return;
+      }
 
       const jsonMatch = textBlock.text.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) { res.json({ data: [] }); return; }
+      if (!jsonMatch) {
+        res.json({ data: [] });
+        return;
+      }
 
       const parsed: unknown = JSON.parse(jsonMatch[0]);
-      if (!Array.isArray(parsed)) { res.json({ data: [] }); return; }
+      if (!Array.isArray(parsed)) {
+        res.json({ data: [] });
+        return;
+      }
 
-      type RawExpense = { amount: unknown; title: unknown; category: unknown; snippet: unknown ;date?: unknown};
+      type RawExpense = {
+        amount: unknown;
+        title: unknown;
+        category: unknown;
+        snippet: unknown;
+        date?: unknown;
+      };
       const results = (parsed as RawExpense[])
-        .filter((item) =>
-          typeof item.amount === 'number' &&
-          item.amount > 0 &&
-          typeof item.title === 'string' &&
-          VALID_CATEGORIES.includes(item.category as ExpenseCategory),
+        .filter(
+          (item) =>
+            typeof item.amount === 'number' &&
+            item.amount > 0 &&
+            typeof item.title === 'string' &&
+            VALID_CATEGORIES.includes(item.category as ExpenseCategory),
         )
         .map((item) => {
-    let formattedDate: string;
-    const parsedDate = new Date(item.date as string);
-    if (item.date && !isNaN(parsedDate.getTime())) {
-      formattedDate = parsedDate.toISOString().split('T')[0];
-    } else {
-      formattedDate = new Date().toISOString().split('T')[0];
-    }
-    console.log("Expense:", item.title, 'from the backend:  Parsed date:', item.date, 'Formatted date:', formattedDate);
-    return {
-      amount: item.amount as number,
-      title: String(item.title).slice(0, 50).trim(),
-      category: item.category as ExpenseCategory,
-      snippet: String(item.snippet ?? '').slice(0, 80).trim(),
-      date: formattedDate, 
-    };
-  });
+          let formattedDate: string;
+          const parsedDate = new Date(item.date as string);
+          if (item.date && !isNaN(parsedDate.getTime())) {
+            formattedDate = parsedDate.toISOString().split('T')[0];
+          } else {
+            formattedDate = new Date().toISOString().split('T')[0];
+          }
+          console.log(
+            'Expense:',
+            item.title,
+            'from the backend:  Parsed date:',
+            item.date,
+            'Formatted date:',
+            formattedDate,
+          );
+          return {
+            amount: item.amount as number,
+            title: String(item.title).slice(0, 50).trim(),
+            category: item.category as ExpenseCategory,
+            snippet: String(item.snippet ?? '')
+              .slice(0, 80)
+              .trim(),
+            date: formattedDate,
+          };
+        });
 
       res.json({ data: results });
     } catch (err) {
