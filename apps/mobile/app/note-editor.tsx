@@ -406,9 +406,7 @@ function ExpenseConfirmSheet({
         return;
       }
       const finalCategory =
-        expCategory === 'Other'
-          ? (customCategory.trim() as ExpenseCategory)
-          : expCategory;
+        expCategory === 'Other' ? (customCategory.trim() as ExpenseCategory) : expCategory;
       onAction(true, expTitle.trim(), amt, finalCategory, expDate);
     } else {
       onAction(
@@ -870,12 +868,24 @@ export default function NoteEditorScreen() {
       );
       const textContent = saveBlocks.length > 0 ? JSON.stringify(saveBlocks) : '';
       if (existingNote) {
-        await updateNote(existingNote.id, { title: t, content: textContent, color, category, isLocked });
+        await updateNote(existingNote.id, {
+          title: t,
+          content: textContent,
+          color,
+          category,
+          isLocked,
+        });
         setHomeSegment('notes');
         router.replace('/(tabs)/home');
         return existingNote.id;
       } else {
-        const note = await createNote({ title: t, content: textContent, color, category, isLocked });
+        const note = await createNote({
+          title: t,
+          content: textContent,
+          color,
+          category,
+          isLocked,
+        });
         clearNoteDraft();
         setHomeSegment('notes');
         router.replace('/(tabs)/home');
@@ -943,7 +953,6 @@ export default function NoteEditorScreen() {
   );
 
   const handleSave = useCallback(async () => {
-    
     const t = title.trim();
     if (!t) {
       showAlert({
@@ -953,34 +962,37 @@ export default function NoteEditorScreen() {
       });
       return;
     }
-    if(autoDetectExpense){
-    setDetecting(true);
-    try {
-      const allText = blocks
-        .filter((b): b is TextBlock => b.type === 'text')
-        .map((b) => b.text)
-        .join('\n');
-      const detected = await detectAllExpenses(t + '\n' + allText);
-      const noteExpenses = existingNote ? expenses.filter((e) => e.noteId === existingNote.id) : [];
+    if (autoDetectExpense) {
+      setDetecting(true);
+      try {
+        const allText = blocks
+          .filter((b): b is TextBlock => b.type === 'text')
+          .map((b) => b.text)
+          .join('\n');
+        const detected = await detectAllExpenses(t + '\n' + allText);
+        const noteExpenses = existingNote
+          ? expenses.filter((e) => e.noteId === existingNote.id)
+          : [];
 
-      const toRemove: ExpenseQueueItem[] = noteExpenses
-        .filter((e) => !detected.some((d) => d.amount === e.amount && d.category === e.category))
-        .map((e) => ({ type: 'remove' as const, existing: e }));
-      const toAdd: ExpenseQueueItem[] = detected
-        .filter(
-          (d) => !noteExpenses.some((e) => e.amount === d.amount && e.category === d.category),
-        )
-        .map((d) => ({ type: 'add' as const, detected: d }));
+        const toRemove: ExpenseQueueItem[] = noteExpenses
+          .filter((e) => !detected.some((d) => d.amount === e.amount && d.category === e.category))
+          .map((e) => ({ type: 'remove' as const, existing: e }));
+        const toAdd: ExpenseQueueItem[] = detected
+          .filter(
+            (d) => !noteExpenses.some((e) => e.amount === d.amount && e.category === d.category),
+          )
+          .map((d) => ({ type: 'add' as const, detected: d }));
 
-      const queue = [...toAdd, ...toRemove];
-      if (queue.length > 0) {
-        totalDetectedRef.current = queue.length;
-        setExpenseQueue(queue);
-        return;
+        const queue = [...toAdd, ...toRemove];
+        if (queue.length > 0) {
+          totalDetectedRef.current = queue.length;
+          setExpenseQueue(queue);
+          return;
+        }
+      } finally {
+        setDetecting(false);
       }
-    } finally {
-      setDetecting(false);
-    }}
+    }
     await doSave();
   }, [title, blocks, existingNote, expenses, doSave, showAlert]);
 
@@ -999,7 +1011,7 @@ export default function NoteEditorScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: 0.8,
+      quality: 0.6,
       allowsMultipleSelection: true,
       selectionLimit: 10,
     });
@@ -1092,9 +1104,7 @@ export default function NoteEditorScreen() {
                 onPress={() => setIsLocked((v) => !v)}
                 style={[
                   s.lockToggleBtn,
-                  isLocked
-                    ? { backgroundColor: doneBg }
-                    : { backgroundColor: 'rgba(0,0,0,0.08)' },
+                  isLocked ? { backgroundColor: doneBg } : { backgroundColor: 'rgba(0,0,0,0.08)' },
                 ]}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 activeOpacity={0.75}
@@ -1179,19 +1189,37 @@ export default function NoteEditorScreen() {
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={() => setAutoDetectExpense((v) => !v)}
-            style={[s.togglePill, { backgroundColor: toolbarBg, borderColor: autoDetectExpense ? COLORS.primary : dividerColor }]}
+            style={[
+              s.togglePill,
+              {
+                backgroundColor: toolbarBg,
+                borderColor: autoDetectExpense ? COLORS.primary : dividerColor,
+              },
+            ]}
           >
             <Ionicons
               name={autoDetectExpense ? 'wallet' : 'wallet-outline'}
               size={14}
               color={autoDetectExpense ? COLORS.primary : toolIconColor}
             />
-            <Text style={[s.toggleLabel, { color: autoDetectExpense ? COLORS.primary : toolIconColor }]}>
+            <Text
+              style={[s.toggleLabel, { color: autoDetectExpense ? COLORS.primary : toolIconColor }]}
+            >
               Auto-detect expenses
             </Text>
             {/* Custom toggle track */}
-            <View style={[s.toggleTrack, { backgroundColor: autoDetectExpense ? COLORS.primary : '#CBD5E1' }]}>
-              <View style={[s.toggleThumb, { alignSelf: autoDetectExpense ? 'flex-end' : 'flex-start' }]} />
+            <View
+              style={[
+                s.toggleTrack,
+                { backgroundColor: autoDetectExpense ? COLORS.primary : '#CBD5E1' },
+              ]}
+            >
+              <View
+                style={[
+                  s.toggleThumb,
+                  { alignSelf: autoDetectExpense ? 'flex-end' : 'flex-start' },
+                ]}
+              />
             </View>
           </TouchableOpacity>
           <View style={[s.toolbar, { backgroundColor: toolbarBg }]}>
@@ -1288,8 +1316,11 @@ const s = StyleSheet.create({
   headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   lockToggleBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   colorDot: {
     width: 28,
