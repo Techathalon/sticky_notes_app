@@ -6,8 +6,11 @@ import { validate } from '../middleware/validate';
 import { createNoteSchema, noteIdSchema, updateNoteSchema } from '../validation/note.schema';
 
 export const notesRouter: Router = Router();
-const ctrl   = new NotesController();
-const upload = multer({ storage: multer.memoryStorage() }); // no fileFilter — Android MIME fix is in controller
+const ctrl = new NotesController();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB safety limit
+}); // no fileFilter — Android MIME fix is in controller
 
 // All note routes require authentication
 notesRouter.use(authenticate);
@@ -28,7 +31,12 @@ notesRouter.post('/detect-expenses', ctrl.detectExpenses);
 notesRouter.delete('/image', ctrl.deleteImage);
 
 // PUT    /api/notes/:id
-notesRouter.put('/:id', validate(noteIdSchema, 'params'), validate(updateNoteSchema), ctrl.updateNote);
+notesRouter.put(
+  '/:id',
+  validate(noteIdSchema, 'params'),
+  validate(updateNoteSchema),
+  ctrl.updateNote,
+);
 
 // DELETE /api/notes/:id
 notesRouter.delete('/:id', validate(noteIdSchema, 'params'), ctrl.deleteNote);
