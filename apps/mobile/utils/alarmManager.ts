@@ -52,7 +52,8 @@ export async function checkAlarmSystemPermissions(): Promise<void> {
   try {
     // 1. Standard Android battery optimization — one-tap system dialog (no settings page needed).
     //    requestIgnoreBatteryOptimizations() resolves false if already granted (skip the wait).
-    const dialogShown: boolean = await NativeModules.OverlayPermission.requestIgnoreBatteryOptimizations();
+    const dialogShown: boolean =
+      await NativeModules.OverlayPermission.requestIgnoreBatteryOptimizations();
     if (dialogShown) {
       // Give the user a moment to respond to the system dialog before the next check.
       await new Promise<void>((r) => setTimeout(r, 1500));
@@ -68,7 +69,9 @@ export async function checkAlarmSystemPermissions(): Promise<void> {
       if (powerInfo.activity) {
         const showModal = _showBatteryOptModal;
         if (showModal) {
-          await new Promise<void>((resolve) => { showModal(resolve); });
+          await new Promise<void>((resolve) => {
+            showModal(resolve);
+          });
         }
       }
     }
@@ -81,7 +84,7 @@ export async function scheduleLocalAlarm(
   id: string,
   title: string,
   alarmAt: Date,
-  type: 'task' | 'event' = 'task'
+  type: 'task' | 'event' = 'task',
 ): Promise<void> {
   if (Platform.OS === 'ios') {
     try {
@@ -109,7 +112,7 @@ export async function scheduleLocalAlarm(
           date: alarmAt,
         },
       });
-      console.log(`[AlarmManager] Scheduled local alarm on iOS: "${title}" at ${alarmAt.toLocaleTimeString()}`);
+      // console.log(`[AlarmManager] Scheduled local alarm on iOS: "${title}" at ${alarmAt.toLocaleTimeString()}`);
     } catch (err) {
       console.error('[AlarmManager] iOS scheduleLocalAlarm failed:', err);
     }
@@ -145,7 +148,12 @@ export async function scheduleLocalAlarm(
           },
           pressAction: { id: 'default', launchActivity: 'default' },
         },
-        data: { alarmTitle: title, alarmType: type, alarmId: id, alarmAt: alarmAt.getTime().toString() },
+        data: {
+          alarmTitle: title,
+          alarmType: type,
+          alarmId: id,
+          alarmAt: alarmAt.getTime().toString(),
+        },
       },
       {
         type: TriggerType.TIMESTAMP,
@@ -153,7 +161,7 @@ export async function scheduleLocalAlarm(
         alarmManager: {
           allowWhileIdle: true, // fires even in Doze mode
         },
-      }
+      },
     );
   } catch (err) {
     console.error('[AlarmManager] scheduleLocalAlarm failed:', err);
@@ -178,9 +186,9 @@ export async function cancelLocalAlarm(id: string): Promise<void> {
 
   try {
     await notifee.cancelTriggerNotification(id);
-    console.log('❌ Cancelling alarm from the alarm manager:', id);
-    const alarms = await notifee.getTriggerNotifications();
-    console.log('Remaining alarms from the alarm manager:', alarms.length);
+    // console.log('❌ Cancelling alarm from the alarm manager:', id);
+    await notifee.getTriggerNotifications();
+    // console.log('Remaining alarms from the alarm manager:', alarms.length);
   } catch {
     // Alarm may not exist — ignore
   }
@@ -203,7 +211,7 @@ export async function cancelAllLocalAlarms(): Promise<void> {
   if (Platform.OS !== 'android') return;
   try {
     await notifee.cancelAllNotifications();
-    console.log('❌ All local alarms cancelled');
+    // console.log('❌ All local alarms cancelled');
   } catch (err) {
     console.error('[AlarmManager] cancelAllLocalAlarms failed:', err);
   }
@@ -215,10 +223,10 @@ export async function cancelAllLocalAlarms(): Promise<void> {
  * Returns unsubscribe function.
  */
 export function registerNotifeeHandler(
-  onAlarm: (title: string, type: string, alarmId: string, alarmAt: string) => void
+  onAlarm: (title: string, type: string, alarmId: string, alarmAt: string) => void,
 ): () => void {
   if (Platform.OS !== 'android') return () => {};
-  console.log('FRONETND ALARM PAGE REGISTERED');
+  // console.log('FRONETND ALARM PAGE REGISTERED');
   return notifee.onForegroundEvent(({ type, detail }) => {
     if (type === EventType.DELIVERED || type === EventType.PRESS) {
       const data = detail.notification?.data as
@@ -275,7 +283,9 @@ export async function checkAndPromptFullScreenIntent(): Promise<boolean> {
     if (granted) return false;
     const showModal = _showFullScreenIntentModal;
     if (showModal) {
-      await new Promise<void>((resolve) => { showModal(resolve); });
+      await new Promise<void>((resolve) => {
+        showModal(resolve);
+      });
     }
     return true;
   } catch {
@@ -294,7 +304,9 @@ export async function checkAndPromptOverlayPermission(): Promise<void> {
   if (granted) return;
   const showModal = _showOverlayModal;
   if (!showModal) return;
-  await new Promise<void>((resolve) => { showModal(resolve); });
+  await new Promise<void>((resolve) => {
+    showModal(resolve);
+  });
 }
 
 /**
@@ -321,7 +333,9 @@ export async function checkAllAlarmPermissions(): Promise<void> {
     const alreadyAsked = await AsyncStorage.getItem('alarmPermissionsAsked');
     if (alreadyAsked) return;
     await AsyncStorage.setItem('alarmPermissionsAsked', 'true');
-  } catch { /* proceed if storage unavailable */ }
+  } catch {
+    /* proceed if storage unavailable */
+  }
   await checkAndPromptFullScreenIntent();
   await checkAlarmSystemPermissions();
   await checkAndPromptOverlayPermission();
