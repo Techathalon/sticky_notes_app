@@ -15,6 +15,7 @@ import {
   ChangePasswordInput,
 } from '../validation/auth.schema';
 import { sendResetEmail } from './email.service';
+import { deleteImage } from './storage.service';
 
 export class AuthService {
   private async createRefreshToken(userId: string): Promise<string> {
@@ -43,11 +44,9 @@ export class AuthService {
       },
     });
 
-    const accessToken = jwt.sign(
-      { id: user.id, email: user.email },
-      env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] },
-    );
+    const accessToken = jwt.sign({ id: user.id, email: user.email }, env.JWT_SECRET, {
+      expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+    });
 
     const tokenId = await this.createRefreshToken(user.id);
 
@@ -77,11 +76,9 @@ export class AuthService {
       throw new AppError(401, 'Invalid email or password');
     }
 
-    const accessToken = jwt.sign(
-      { id: user.id, email: user.email },
-      env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] },
-    );
+    const accessToken = jwt.sign({ id: user.id, email: user.email }, env.JWT_SECRET, {
+      expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+    });
 
     const tokenId = await this.createRefreshToken(user.id);
 
@@ -108,11 +105,9 @@ export class AuthService {
       throw new AppError(401, 'Session expired, please log in again');
     }
 
-    const accessToken = jwt.sign(
-      { id: record.user.id, email: record.user.email },
-      env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] },
-    );
+    const accessToken = jwt.sign({ id: record.user.id, email: record.user.email }, env.JWT_SECRET, {
+      expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+    });
 
     return {
       accessToken,
@@ -194,5 +189,49 @@ export class AuthService {
     await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
 
     return { message: 'Password changed successfully' };
+  }
+
+  async deleteAccount(userId: string): Promise<{ message: string }> {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new AppError(404, 'User not found');
+
+    // 1. Clean up user's uploaded images from storage (best-effort)
+    try {
+      const notes = await prisma.note.findMany({
+        where: { userId },
+        select: { content: true },
+      });
+
+      for (const note of notes) {
+        if (!note.content) continue;
+        try {
+          const blocks = JSON.parse(note.content);
+          if (Array.isArray(blocks)) {
+            for (const b of blocks) {
+              if (b?.type === 'image' && typeof b?.uri === 'string') {
+                await deleteImage(b.uri);
+              }
+            }
+          }
+        } catch {
+          // If content is not JSON blocks, check for MinIO bucket URLs
+          const matches = note.content.match(/https?:\/\/[^\s"']+/g);
+          if (matches) {
+            for (const url of matches) {
+              if (url.includes(`/${env.MINIO_BUCKET}/`)) {
+                await deleteImage(url);
+              }
+            }
+          }
+        }
+      }
+    } catch (storageErr) {
+      console.warn('[deleteAccount] Error cleaning up user images:', storageErr);
+    }
+
+    // 2. Cascade delete user and all related records (notes, todos, events, expenses, budgets, tokens, settings)
+    await prisma.user.delete({ where: { id: userId } });
+
+    return { message: 'Account deleted successfully' };
   }
 }

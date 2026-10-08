@@ -34,4 +34,12 @@ authRouter.post('/refresh-token', validate(refreshTokenSchema), ctrl.refreshToke
 authRouter.post('/logout', validate(logoutSchema), ctrl.logout);
 
 // POST /api/auth/change-password  (requires valid access token)
-authRouter.post('/change-password', authenticate, validate(changePasswordSchema), ctrl.changePassword);
+authRouter.post(
+  '/change-password',
+  authenticate,
+  validate(changePasswordSchema),
+  ctrl.changePassword,
+);
+
+// DELETE /api/auth/account  (requires valid access token)
+authRouter.delete('/account', authenticate, ctrl.deleteAccount);

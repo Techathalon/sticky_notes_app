@@ -19,6 +19,7 @@ interface AuthState {
   loadToken: () => Promise<void>;
   refreshAccessToken: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 // ── JWT expiry check (no library needed) ──────────────────────
@@ -111,6 +112,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       // Best-effort — don't block logout
     }
+    await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+    await SecureStore.deleteItemAsync(TOKEN_ID_KEY);
+    await SecureStore.deleteItemAsync(USER_KEY);
+    set({ user: null, accessToken: null, tokenId: null, isAuthenticated: false });
+  },
+
+  deleteAccount: async () => {
+    if (refreshTimerId) {
+      clearTimeout(refreshTimerId);
+      refreshTimerId = null;
+    }
+    try {
+      const fcmToken = await AsyncStorage.getItem('fcm-device-token');
+      if (fcmToken) {
+        await pushApi.removeToken(fcmToken);
+        await AsyncStorage.removeItem('fcm-device-token');
+      }
+    } catch {
+      // Best-effort — don't block account deletion
+    }
+    await authApi.deleteAccount();
     await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
     await SecureStore.deleteItemAsync(TOKEN_ID_KEY);
     await SecureStore.deleteItemAsync(USER_KEY);
