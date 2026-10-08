@@ -66,6 +66,8 @@ export const authApi = {
     api.post<{ message: string }>('/auth/logout', data).then((r) => r.data),
   changePassword: (data: { currentPassword: string; newPassword: string }) =>
     api.post<{ message: string }>('/auth/change-password', data).then((r) => r.data),
+  deleteAccount: () =>
+    api.delete<{ message: string }>('/auth/account').then((r) => r.data),
 };
 
 // ─── Notes API ───────────────────────────────────────────────
