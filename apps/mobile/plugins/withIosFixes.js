@@ -147,8 +147,17 @@ function addModularHeadersToPodfile(config) {
           );
         }
         if (!contents.includes("config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'")) {
-          const postInstallTargetCode = `    installer.pods_project.targets.each do |target|\\n      target.build_configurations.each do |config|\\n        if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 15.1\\n          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'\\n        end\\n      end\\n    end\\n  end`;
-          contents = contents.replace(/\n  end\s*\nend/s, `\n${postInstallTargetCode}\nend`);
+          const postInstallTargetCode = `    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 15.1
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+        end
+      end
+    end`;
+          contents = contents.replace(
+            /(\s*react_native_post_install\([\s\S]*?\)\n)/,
+            `$1\n${postInstallTargetCode}\n`
+          );
         }
         fs.writeFileSync(podfilePath, contents, 'utf-8');
       }

@@ -319,6 +319,29 @@ export default function SettingsScreen() {
           />
         </View>
 
+        {/* ABOUT & LEGAL */}
+        <Text style={[s.sectionHeader, { color: c.textMuted }]}>About & Legal</Text>
+        <View style={[s.section, { backgroundColor: c.surface }]}>
+          <SettingRow
+            icon="shield-checkmark-outline"
+            iconBg="#EFF6FF"
+            iconColor="#3B82F6"
+            label="Privacy Policy"
+            sublabel="Read how your data is protected"
+            onPress={() => Linking.openURL('https://www.techathalon.com')}
+            c={c}
+          />
+          <SettingRow
+            icon="help-circle-outline"
+            iconBg="#F0FDF4"
+            iconColor="#10B981"
+            label="Support & Help"
+            sublabel="Get help or contact support"
+            onPress={() => Linking.openURL('https://www.techathalon.com')}
+            c={c}
+          />
+        </View>
+
         {/* LOG OUT */}
         <Text style={[s.sectionHeader, { color: c.textMuted }]}>Session</Text>
         <View style={[s.section, { backgroundColor: c.surface }]}>
