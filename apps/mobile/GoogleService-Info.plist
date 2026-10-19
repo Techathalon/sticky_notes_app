@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.stickynotes.app</string>
+	<string>com.techathalon.stickynotes</string>
 	<key>PROJECT_ID</key>
 	<string>sticky-notes-de0ef</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:640513640473:ios:08f653e085a5dbcac80288</string>
+	<string>1:640513640473:ios:fc174b0c3d8e868bc80288</string>
 </dict>
 </plist>

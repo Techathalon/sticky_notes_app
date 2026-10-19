@@ -12,12 +12,14 @@
       "resizeMode": "contain"
     },
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.stickynotes.app",
+      "supportsTablet": false,
+      "bundleIdentifier": "com.techathalon.stickynotes",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "UIBackgroundModes": ["remote-notification"],
-        "NSFaceIDUsageDescription": "Use Face ID to unlock your locked notes securely."
+        "NSFaceIDUsageDescription": "Use Face ID to unlock your locked notes securely.",
+        "NSCameraUsageDescription": "Allow Sticky Notes to take photos to attach to your notes.",
+        "NSPhotoLibraryUsageDescription": "Allow Sticky Notes to select photos to attach to your notes."
       }
     },
     "android": {
@@ -65,9 +67,7 @@
           "icon": "./assets/images/icon.png",
           "color": "#ffffff",
           "defaultChannel": "default",
-          "sounds": [
-            "./assets/sounds/alarm.wav"
-          ]
+          "sounds": ["./assets/sounds/alarm.wav"]
         }
       ],
       "expo-audio",
